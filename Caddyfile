@@ -1,0 +1,32 @@
+# Caddy obtains and renews TLS certificates after public DNS and ports 80/443
+# point to this host.
+zibs.app {
+	encode zstd gzip
+
+	# Grafana externally shared dashboards use this page, its deliberately
+	# anonymous dashboard API, and these public static assets. Do not proxy the
+	# broader Grafana UI or its general /api surface.
+	@public_grafana path /public-dashboards/* /api/public/dashboards/* /public/build/* /public/img/* /favicon.ico
+	handle @public_grafana {
+		reverse_proxy grafana:3000
+	}
+
+	# Do not let Grafana workspace routes fall through to the public app. They
+	# are neither needed by an externally shared dashboard nor safe to expose;
+	# returning here also keeps scans and misrouted browser requests out of
+	# zibs's request logs and metrics.
+	@grafana_private_or_probe path /api/datasources/* /api/v1/* /config/v1/* /dashboards /dashboards/* /grafana /grafana/* /grafana-* /log-grafana-javascript-agent /login /public/plugins/* /rules
+	respond @grafana_private_or_probe 404
+
+	handle {
+		reverse_proxy zibs:8080
+	}
+}
+
+# Static generative-art gallery. `browse` supplies the directory-index UI for
+# artwork directories which deliberately do not contain an index.html file.
+art-gallery.dinubarbu.com {
+	root * /srv/art-gallery
+	encode zstd gzip
+	file_server browse
+}

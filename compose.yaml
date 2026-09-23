@@ -1,0 +1,32 @@
+name: caddy
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/art-gallery/public:/srv/art-gallery:ro
+      # These are the existing zibs-owned volume names. Keeping them external
+      # retains the live ACME certificates and Caddy runtime state on cutover.
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    networks:
+      - zibs-app-edge
+
+volumes:
+  caddy-data:
+    external: true
+    name: zibs_caddy-data
+  caddy-config:
+    external: true
+    name: zibs_caddy-config
+
+networks:
+  zibs-app-edge:
+    external: true
+    name: zibs_app-edge
