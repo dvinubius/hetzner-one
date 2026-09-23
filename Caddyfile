@@ -1,3 +1,11 @@
+{
+	# This listener is shared by every HTTPS host below. A larger header block is
+	# rejected by Caddy before it can reach any upstream service.
+	servers :443 {
+		max_header_size 32KiB
+	}
+}
+
 # Caddy obtains and renews TLS certificates after public DNS and ports 80/443
 # point to this host.
 zibs.app {
@@ -29,4 +37,58 @@ art-gallery.dinubarbu.com {
 	root * /srv/art-gallery
 	encode zstd gzip
 	file_server browse
+}
+
+hooklook.app {
+	encode zstd gzip
+
+	# caddy-ratelimit uses sliding windows, not a token bucket. The two capture
+	# windows therefore express both the 60/minute sustained budget and a strict
+	# maximum burst of 20 requests in any 20-second window. {remote_host} is the
+	# direct socket peer; this intentionally does not trust forwarded headers.
+	route {
+		rate_limit {
+			zone hooklook_create {
+				match {
+					method GET
+					path /
+				}
+				key {remote_host}
+				events 10
+				window 1m
+			}
+
+			zone hooklook_capture_sustained {
+				match {
+					path_regexp hooklook_capture ^/b/[^/]+(?:/.*)?$
+				}
+				key {remote_host}
+				events 60
+				window 1m
+			}
+
+			zone hooklook_capture_burst {
+				match {
+					path_regexp hooklook_capture_burst ^/b/[^/]+(?:/.*)?$
+				}
+				key {remote_host}
+				events 20
+				window 20s
+			}
+		}
+
+		# Restrict bodies only on public capture URLs. Inspector pages, APIs, and
+		# SSE remain unmodified by this handler.
+		@hooklook_capture path_regexp hooklook_capture_route ^/b/[^/]+(?:/.*)?$
+		handle @hooklook_capture {
+			request_body {
+				max_size 256KiB
+			}
+			reverse_proxy hooklook:8080
+		}
+
+		handle {
+			reverse_proxy hooklook:8080
+		}
+	}
 }

@@ -2,7 +2,11 @@ name: caddy
 
 services:
   caddy:
-    image: caddy:2.11.4-alpine
+    # A distinct custom-image tag leaves the prior official image untouched as
+    # a safe rollback reference until the candidate has been verified.
+    image: caddy-hooklook:2.11.4-ratelimit
+    build:
+      context: .
     ports:
       - "80:80"
       - "443:443"
@@ -17,6 +21,7 @@ services:
     restart: unless-stopped
     networks:
       - zibs-app-edge
+      - hooklook-edge
 
 volumes:
   caddy-data:
@@ -30,3 +35,7 @@ networks:
   zibs-app-edge:
     external: true
     name: zibs_app-edge
+  # This project owns the shared ingress network. Hooklook only joins it as an
+  # external consumer, so it cannot accidentally create an isolated network.
+  hooklook-edge:
+    name: hooklook-edge
