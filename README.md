@@ -15,12 +15,12 @@ not depend on host monitoring.
 
 ## Dependencies
 
-The project deliberately reuses Docker resources created by the zibs project:
+The project owns both shared edge networks and reuses the existing certificate volumes:
 
 - `zibs_caddy-data` and `zibs_caddy-config` retain Caddy's ACME certificates
   and runtime configuration.
-- `zibs_app-edge` lets Caddy reach the `zibs` and `grafana` services by their
-  Docker service names. zibs owns this network's lifecycle.
+- `zibs-edge` is created and owned by this project. zibs joins it externally;
+  Caddy reaches `zibs` and `grafana` by their Docker service names.
 - `hooklook-edge` is created and owned by this project. Hooklook joins it as
   an external network so Caddy can reach `hooklook:8080`; no Hooklook port is
   exposed through this network to any other service.
@@ -66,7 +66,7 @@ docker compose run --rm --no-deps caddy caddy validate \
 ```
 
 The validation container does not publish ports. It requires the external
-network and volumes to exist.
+certificate volumes to exist; this project creates both edge networks.
 
 ## Deploy and reload
 

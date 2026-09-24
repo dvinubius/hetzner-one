@@ -20,7 +20,7 @@ services:
       - caddy-config:/config
     restart: unless-stopped
     networks:
-      - zibs-app-edge
+      - zibs-edge
       - hooklook-edge
 
 volumes:
@@ -32,9 +32,9 @@ volumes:
     name: zibs_caddy-config
 
 networks:
-  zibs-app-edge:
-    external: true
-    name: zibs_app-edge
+  # Shared ingress networks are owned here; applications join externally.
+  zibs-edge:
+    name: zibs-edge
   # This project owns the shared ingress network. Hooklook only joins it as an
   # external consumer, so it cannot accidentally create an isolated network.
   hooklook-edge:
