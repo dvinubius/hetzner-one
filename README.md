@@ -76,3 +76,7 @@ rollback files and the previous running image on the VPS. Read the
 [deployment runbook](docs/deployment-runbook.md) for prerequisites, a Caddyfile
 reload, verification, diagnostics, and rollback. The [documentation index](docs/README.md)
 routes to the current operational and historical records.
+
+## License
+
+[MIT](LICENSE)
