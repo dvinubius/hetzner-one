@@ -3,7 +3,8 @@
 This is the current procedure for redeploying shared Caddy ingress from this
 repository. It assumes a prepared Docker VPS; it does not provision the host,
 manage DNS, or deploy any upstream application; each upstream is deployed from
-its own repository, for example
+its own repository:
+[zibs](https://github.com/dvinubius/zibs) and
 [Hooklook](https://github.com/dvinubius/hooklook/blob/main/docs/deployment-runbook.md).
 The live project is `/opt/caddy`.
 

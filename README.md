@@ -21,7 +21,8 @@ The project owns both shared edge networks and reuses the existing certificate v
 - `caddy_caddy-data` and `caddy_caddy-config` retain Caddy's ACME certificates
   and runtime configuration. They are external, created outside Compose, so no
   Compose command can remove them.
-- `zibs-edge` is created and owned by this project. zibs joins it externally;
+- `zibs-edge` is created and owned by this project.
+  [zibs](https://github.com/dvinubius/zibs) joins it externally;
   Caddy reaches `zibs` and `grafana` by their Docker service names.
 - `hooklook-edge` is created and owned by this project.
   [Hooklook](https://github.com/dvinubius/hooklook) joins it as an external

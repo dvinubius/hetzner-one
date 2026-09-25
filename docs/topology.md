@@ -2,7 +2,9 @@
 
 Hetzner-One owns shared Caddy ingress, its public ports, certificate storage,
 the `zibs-edge` and `hooklook-edge` Docker networks, and its platform monitoring. Upstream services run
-on the same VPS and are deployed by their respective projects.
+on the same VPS and are deployed by their respective projects,
+[zibs](https://github.com/dvinubius/zibs) and
+[Hooklook](https://github.com/dvinubius/hooklook).
 Application observability remains outside this repository.
 
 ## Ingress
