@@ -76,9 +76,9 @@ Copy `.env.production.example` to the ignored `.env.production` and set
 Save the password in your password manager. The file is sourced by Bash, so
 quote a password containing shell metacharacters. Use a password without an
 apostrophe so the deployment script can preserve it in Compose's `.env` syntax.
-The deployment script sends
-the password over SSH to a mode-0600 `.env` file in its VPS staging directory;
-activation installs it as `/opt/caddy/.env`. It never copies the local
+The deployment script sends the password over SSH to a mode-0600 `.env` file
+in its VPS staging directory; activation installs it as `/opt/caddy/.env` and
+then deletes the staged copy, even on failure. It never copies the local
 `.env.production` file. The password is passed to Grafana through its
 `GF_SECURITY_ADMIN_PASSWORD` environment variable, matching the Zibs pattern.
 The remote `.env` and each update snapshot's copy of it contain the password;

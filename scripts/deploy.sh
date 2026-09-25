@@ -81,6 +81,7 @@ fi
 
 # Serialize all deployment modes on the VPS. Full activation is intentionally
 # staged: healthy monitoring can remain if the Caddy phase rolls back.
+# Remove the staged password even when the lock is refused before activation.
 ssh "${ssh_options[@]}" "$target" \
- "flock -n /opt/caddy/.deploy.lock bash '$stage/scripts/activate-mode.sh' '$stamp' '$mode' </dev/null"
+ "flock -n /opt/caddy/.deploy.lock bash '$stage/scripts/activate-mode.sh' '$stamp' '$mode' </dev/null; rc=\$?; rm -f '$stage/.env'; exit \$rc"
 printf '%s deployment succeeded. Rollback stamp: %s\n' "$mode" "$stamp"

@@ -110,6 +110,15 @@ with tempfile.TemporaryDirectory(prefix='hetzner-mode-test-') as tmp:
     runner.write_text((ROOT / 'scripts/activate-mode.sh').read_text().replace('/opt/caddy', str(live)))
     for mode, expected in [('caddy', ['caddy']), ('observability', ['observability']), ('full', ['observability', 'caddy', 'verify'])]:
         log.write_text('')
+        staged_env = stage.parent / '.env'
+        staged_env.write_text('GRAFANA_ADMIN_PASSWORD=staged\n')
         subprocess.run(['bash', str(runner), STAMP, mode], check=True)
         assert log.read_text().splitlines() == expected
+        assert not staged_env.exists()
         print('PASS: dispatch mode', mode)
+    # A failed activation must also remove the staged password.
+    (stage / 'activate-observability.sh').write_text('exit 1\n')
+    staged_env.write_text('GRAFANA_ADMIN_PASSWORD=staged\n')
+    assert subprocess.run(['bash', str(runner), STAMP, 'observability']).returncode != 0
+    assert not staged_env.exists()
+    print('PASS: failed activation removes staged password')
