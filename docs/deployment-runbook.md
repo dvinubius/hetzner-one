@@ -2,14 +2,19 @@
 
 This is the current procedure for redeploying shared Caddy ingress from this
 repository. It assumes a prepared Docker VPS; it does not provision the host,
-manage DNS, or deploy any upstream application. The live project is `/opt/caddy`.
+manage DNS, or deploy any upstream application; each upstream is deployed from
+its own repository, for example
+[Hooklook](https://github.com/dvinubius/hooklook/blob/main/docs/deployment-runbook.md).
+The live project is `/opt/caddy`.
 
 ## What this project owns
 
 `compose.yaml` publishes TCP 80/443 and UDP 443, builds the pinned Caddy image,
 and mounts `Caddyfile`. Caddy serves `zibs.app`, `art-gallery.dinubarbu.com`, and
 `hooklook.app`. It also owns both `hooklook-edge` and `zibs-edge` Docker networks. Hooklook
-and zibs join their respective edge networks externally. The
+and zibs join their respective edge networks externally, so deploy this
+project before either of them: Hooklook's deployment stops at its
+`hooklook-edge` check until this project has created the network. The
 `caddy_caddy-data`/`caddy_caddy-config` volumes must already exist; they are
 external resources and must be preserved. Gallery files
 must exist at `/opt/art-gallery/public` and are mounted read-only. No secrets
@@ -111,7 +116,9 @@ related application repositories unless the user explicitly asks; Docker
 status, network inspection, and Caddy logs are enough for initial triage.
 
 After deploying a Hooklook capture-body policy change, run Hooklook's
-`scripts/verify-public.sh` from a trusted workstation. Its 10 MB boundary
+[`scripts/verify-public.sh`](https://github.com/dvinubius/hooklook/blob/main/scripts/verify-public.sh)
+from a trusted workstation, as described in its
+[production verification runbook](https://github.com/dvinubius/hooklook/blob/main/docs/production-verification-runbook.md). Its 10 MB boundary
 check sends one accepted 10,000,000-byte capture and checks that fixed-length
 and chunked 10,000,001-byte captures receive `413`. Run the new verifier only
 after the matching Caddyfile is live.
