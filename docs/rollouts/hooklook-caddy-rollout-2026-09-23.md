@@ -12,8 +12,9 @@ completed implementation plan and describes the deployed ingress change.
   Hooklook joins it externally; Caddy proxies to `hooklook:8080` over that
   network.
 - `hooklook.app` has a Caddy-managed Let's Encrypt certificate.
-- Caddy rejects HTTPS request headers above 32 KiB for every site sharing the
-  `:443` listener.
+- Caddy's configured 32 KiB setting rejects HTTPS HTTP/1.1 request headers
+  above approximately 36 KiB for every site sharing the `:443` listener,
+  because Go adds a 4 KiB parser-buffer allowance.
 - Only capture URLs matching `/b/{code}` or `/b/{code}/...` receive a 256 KiB
   request-body limit. Inspector pages, APIs, and SSE are not affected.
 - Limits use Caddy's direct socket peer (`{remote_host}`), not untrusted
