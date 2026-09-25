@@ -56,7 +56,7 @@ stage="/opt/caddy/.staging/$stamp"
 
 printf 'Checking %s...\n' "$target"
 ssh "${ssh_options[@]}" "$target" \
-	"command -v flock >/dev/null && command -v docker >/dev/null && command -v curl >/dev/null && docker compose version >/dev/null && docker volume inspect zibs_caddy-data zibs_caddy-config >/dev/null && test -d /opt/art-gallery/public && install -d -m 0750 /opt/caddy/.staging && mkdir -m 0750 '$stage'"
+	"command -v flock >/dev/null && command -v docker >/dev/null && command -v curl >/dev/null && docker compose version >/dev/null && docker volume inspect caddy_caddy-data caddy_caddy-config >/dev/null && test -d /opt/art-gallery/public && install -d -m 0750 /opt/caddy/.staging && mkdir -m 0750 '$stage'"
 
 if [[ $mode != caddy ]]; then
  [[ ${#grafana_admin_password} -ge 20 && $grafana_admin_password != *$'\n'* && $grafana_admin_password != *$'\r'* && $grafana_admin_password != *"'"* ]] || {

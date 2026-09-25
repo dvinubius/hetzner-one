@@ -10,7 +10,7 @@ manage DNS, or deploy any upstream application. The live project is `/opt/caddy`
 and mounts `Caddyfile`. Caddy serves `zibs.app`, `art-gallery.dinubarbu.com`, and
 `hooklook.app`. It also owns both `hooklook-edge` and `zibs-edge` Docker networks. Hooklook
 and zibs join their respective edge networks externally. The
-`zibs_caddy-data`/`zibs_caddy-config` volumes must already exist; they are
+`caddy_caddy-data`/`caddy_caddy-config` volumes must already exist; they are
 external resources and must be preserved. Gallery files
 must exist at `/opt/art-gallery/public` and are mounted read-only. No secrets
 or domain values are needed by the Caddy Compose file.
@@ -133,19 +133,3 @@ docker compose up -d --no-deps --force-recreate caddy
 Then repeat the public checks above. The image tag is present only if a Caddy
 container was running when that backup was made. Keep the certificate volumes;
 never use `docker compose down -v`.
-
-## zibs edge ownership cutover (2026-09-24)
-
-Both edge networks are now owned here. `zibs-edge` was bootstrapped with this
-project's Compose ownership labels and attached to the running containers
-without restarting Caddy. zibs consumes it externally. The old `zibs_app-edge`
-network is empty and retained temporarily for rollback. Backups of both prior
-Compose files and the zibs deployment script are in
-`/opt/caddy/rollback/zibs-edge-cleanup-20260924`. The Caddyfile and certificate
-volumes were unchanged.
-
-The next normal Compose deployment will reconcile the original container
-configuration hashes and may recreate containers. Do not delete the shared
-networks or use `compose down` as a reconciliation step. Caddy access/error
-log collection remains future host-level/shared work owned by this project;
-zibs does not collect those logs.

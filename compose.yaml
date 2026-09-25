@@ -14,8 +14,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - /opt/art-gallery/public:/srv/art-gallery:ro
-      # These are the existing zibs-owned volume names. Keeping them external
-      # retains the live ACME certificates and Caddy runtime state on cutover.
+      # External so no Compose command in any project can remove TLS state.
+      # Copied from the historical zibs_caddy-* volumes on migration.
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
@@ -27,10 +27,10 @@ services:
 volumes:
   caddy-data:
     external: true
-    name: zibs_caddy-data
+    name: caddy_caddy-data
   caddy-config:
     external: true
-    name: zibs_caddy-config
+    name: caddy_caddy-config
 
 networks:
   # Shared ingress networks are owned here; applications join externally.

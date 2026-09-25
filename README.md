@@ -9,17 +9,18 @@ Hostnames are explicit in [`Caddyfile`](Caddyfile). There is no
 `CADDY_DOMAIN` environment variable to configure.
 
 Zibs and Hooklook each own their Grafana server, dashboard configuration, and
-collectors. The prepared platform stack adds its own Grafana, Prometheus, and
-node_exporter for host and Caddy metrics. Deployment is pending user-run
-verification; follow the [observability runbook](docs/observability-runbook.md).
+collectors. The platform stack adds its own Grafana, Prometheus, and
+node_exporter for host and Caddy metrics; operate it with the
+[observability runbook](docs/observability-runbook.md).
 The current Compose project remains named `caddy` to retain existing resources.
 
 ## Dependencies
 
 The project owns both shared edge networks and reuses the existing certificate volumes:
 
-- `zibs_caddy-data` and `zibs_caddy-config` retain Caddy's ACME certificates
-  and runtime configuration.
+- `caddy_caddy-data` and `caddy_caddy-config` retain Caddy's ACME certificates
+  and runtime configuration. They are external, created outside Compose, so no
+  Compose command can remove them.
 - `zibs-edge` is created and owned by this project. zibs joins it externally;
   Caddy reaches `zibs` and `grafana` by their Docker service names.
 - `hooklook-edge` is created and owned by this project. Hooklook joins it as
