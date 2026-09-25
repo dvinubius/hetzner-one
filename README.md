@@ -9,8 +9,9 @@ Hostnames are explicit in [`Caddyfile`](Caddyfile). There is no
 `CADDY_DOMAIN` environment variable to configure.
 
 Zibs and Hooklook each own their Grafana server, dashboard configuration, and
-collectors. A separate Hetzner-One Grafana and node_exporter for host monitoring
-are deferred to the [host observability plan](.agents/HOST-OBSERVABILITY-PLAN.md).
+collectors. The prepared platform stack adds its own Grafana, Prometheus, and
+node_exporter for host and Caddy metrics. Deployment is pending user-run
+verification; follow the [observability runbook](docs/observability-runbook.md).
 The current Compose project remains named `caddy` to retain existing resources.
 
 ## Dependencies
@@ -22,8 +23,8 @@ The project owns both shared edge networks and reuses the existing certificate v
 - `zibs-edge` is created and owned by this project. zibs joins it externally;
   Caddy reaches `zibs` and `grafana` by their Docker service names.
 - `hooklook-edge` is created and owned by this project. Hooklook joins it as
-  an external network so Caddy can reach `hooklook:8080`; no Hooklook port is
-  exposed through this network to any other service.
+  an external network so Caddy can reach `hooklook:8080`. Network membership
+  permits peer connectivity; it is not a per-port firewall.
 - `/opt/art-gallery/public` is mounted read-only at `/srv/art-gallery`.
 
 ## Hooklook ingress policy
@@ -60,13 +61,16 @@ may affect future project-managed resources.
 ## Deploy
 
 Copy `.env.production.example` to the local, Git-ignored `.env.production` and
-set the VPS address. Then run:
+set the VPS address. Set an independent `GRAFANA_ADMIN_PASSWORD` there before
+deploying observability. Then run:
 
 ```bash
-./scripts/deploy.sh
+./scripts/deploy.sh caddy          # default; ingress only
+./scripts/deploy.sh observability  # platform monitoring only
+./scripts/deploy.sh full           # monitoring, then ingress, then verification
 ```
 
-The script stages, validates, builds, activates, and checks Caddy. It saves
+The script stages, validates, activates, and checks the selected services. It saves
 rollback files and the previous running image on the VPS. Read the
 [deployment runbook](docs/deployment-runbook.md) for prerequisites, a Caddyfile
 reload, verification, diagnostics, and rollback. The [documentation index](docs/README.md)

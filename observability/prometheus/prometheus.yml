@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: [platform-node:9100]
+    scrape_timeout: 10s
+    sample_limit: 10000
+  - job_name: caddy
+    static_configs:
+      - targets: [caddy:9180]
+    scrape_timeout: 10s
+    sample_limit: 20000
+    # Fail the scrape rather than silently accepting unbounded growth.
+    label_limit: 20
+    label_value_length_limit: 200

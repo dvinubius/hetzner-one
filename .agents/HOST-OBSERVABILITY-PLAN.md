@@ -2,14 +2,13 @@
 
 ## Status and scope
 
-Planned, not deployed. This plan incorporates the former Caddy observability
-proposal. Add a separate Hetzner-One Grafana, one platform Prometheus, and
-node_exporter to observe the VPS and shared Caddy ingress.
+Implementation prepared on 2026-09-25; VPS rollout and acceptance remain pending.
+Follow the [observability runbook](../docs/observability-runbook.md). Local tests
+cover the metrics path, provisioning, and Caddy rejection boundaries; the user
+runs host-specific and public-route verification on deployment.
 
-Zibs and Hooklook retain their own Grafana servers, dashboards, provisioning,
-credentials, Prometheus, Alloy, and Loki. This rollout does not scrape their
-application metrics, collect their logs, or migrate their Grafana databases.
-Collector centralization remains a separate, unscheduled decision.
+Add a separate Hetzner-One Grafana, one platform Prometheus, and
+node_exporter to observe the VPS and shared Caddy ingress.
 
 Hetzner-One already owns shared ingress at `/opt/caddy`, with Compose project
 name `caddy`. Keep that directory, project identity, both edge networks,
@@ -38,9 +37,6 @@ Host CPU, memory, load, filesystems, disk I/O, and network behavior belong to
 the VPS platform. Caddy availability, traffic, upstream behavior, and edge
 rejections belong alongside them. Both dashboards use a stable platform
 Prometheus datasource UID so a later collector change need not rewrite panels.
-
-Zibs's existing node_exporter remains unchanged. Duplicate host collection is
-acceptable until its independent topology work is scheduled.
 
 ## Target topology
 
@@ -129,7 +125,9 @@ shows the per-key label that drives the restriction above.
 3. Add a pinned node_exporter with read-only `/`, `/proc`, and `/sys` views,
    correct host path flags, filesystem exclusions, capability drop,
    `no-new-privileges`, and no published port. Verify that metrics describe
-   the host rather than the container.
+   the host rather than the container. The implementation disables netdev
+   netlink and mounts `/proc/1/net` at `/host/proc/net` to observe the host's
+   network namespace while keeping the exporter on a private bridge.
 4. Add one pinned Prometheus with only `node` and `caddy` jobs, a named volume,
    and bounded time and size retention. Budget WAL and compaction headroom.
 5. Enable Caddy's built-in HTTP metrics and private handler while disabling
@@ -145,8 +143,12 @@ shows the per-key label that drives the restriction above.
    explicit service selection and independent rollback. Observability-only
    updates must not recreate Caddy; initial metrics activation requires an
    intentional Caddy update. Avoid project-wide orphan removal.
-9. Update deployment, diagnostics, SSH access, backup/restore, and rollback
-   runbooks. Include Grafana runtime state and provisioned dashboard recovery.
+9. Update deployment, diagnostics, SSH access, and rollback runbooks. The
+   platform stack is disposable: dashboards and datasource are provisioned
+   from the repository, and Grafana's admin account bootstraps from the
+   deployed password. Take cold snapshots only before observability updates,
+   so an image upgrade that migrates Grafana or TSDB state can be undone. No
+   standalone or off-host backup.
 10. Pin new image versions and verify publication age against the package-age
     policy before installing or pulling them.
 
@@ -193,7 +195,7 @@ limits need WAL and compaction headroom beyond the nominal cap; see the
 **Decision for this rollout:** use one additional, bounded platform
 Prometheus for both host and Caddy metrics, plus a separate platform Grafana. Defer a third Alloy/Loki unless a concrete
 request-level diagnostic requirement appears. If full Caddy log ingestion is
-later needed before collector consolidation, measure log rate under load and
+later needed, measure log rate under load and
 set rotation, retention, and free-space thresholds first. The full trio is
 feasible on the observed idle host, but adds complexity that the stated
 health/traffic dashboard does not yet require.
@@ -204,7 +206,8 @@ health/traffic dashboard does not yet require.
    certificate volumes, and current public-route checks. Inventory loopback
    port 3002 and retained experimental resources before creating new state.
 2. Refresh memory/disk measurements; the baseline above is historical. Check
-   capacity for node_exporter, Prometheus, Grafana, retention, and backups.
+   capacity for node_exporter, Prometheus, Grafana, retention, and update
+   snapshots.
 3. Stage prepared files under `/opt/caddy` using the documented backup and
    activation procedure. Validate Compose, Prometheus configuration, and the
    candidate Caddyfile/image before modifying live services.
@@ -237,17 +240,15 @@ certificate volumes. Recheck all public routes.
 
 Stop only the platform observability services if needed; preserve their named
 volumes for inspection and leave both application stacks untouched. Do not
-use `docker compose down -v`. Restore Grafana state from a verified backup
-when needed; do not substitute either application's database.
+use `docker compose down -v`. Undo an observability update from its cold
+snapshot; recreate a lost platform volume empty rather than substituting either
+application's database.
 
 ## Relationship to other work
 
 - Hooklook and zibs observability remain independently deployed and owned.
 - Zibs's later node_exporter removal and network segmentation belong to its
   own `docs/v2-topology-improvements.md`, outside this rollout.
-- [Collector centralization](../docs/collector-centralization-plan.md) is an
-  unapproved future proposal that needs revision for separate Grafana ownership.
-  It does not supersede this plan or authorize application changes.
 - The [current topology](../docs/topology.md) and
   [deployment runbook](../docs/deployment-runbook.md) describe live ingress;
   update them when implementation and user-run deployment change reality.
@@ -260,5 +261,5 @@ when needed; do not substitute either application's database.
 - Host series, Caddy traffic, bounded rejection signals, and datasource health
   are verified; no application metrics or logs enter the platform stack.
 - Public routes, the zibs shared dashboard, and certificate state are preserved.
-- Private endpoint boundaries, retention, backup/restore, and rollback checks
+- Private endpoint boundaries, retention, and rollback checks
   pass through user-run verification.

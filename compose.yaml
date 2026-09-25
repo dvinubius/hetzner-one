@@ -22,6 +22,7 @@ services:
     networks:
       - zibs-edge
       - hooklook-edge
+      - platform-metrics
 
 volumes:
   caddy-data:
@@ -39,3 +40,6 @@ networks:
   # external consumer, so it cannot accidentally create an isolated network.
   hooklook-edge:
     name: hooklook-edge
+  # Also declared by compose.observability.yaml under the same project/key.
+  platform-metrics:
+    internal: true

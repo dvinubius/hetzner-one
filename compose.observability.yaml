@@ -1,0 +1,92 @@
+# Intentionally separate: observability updates never reconcile the Caddy service.
+name: caddy
+
+x-runtime: &runtime
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  platform-node:
+    <<: *runtime
+    image: prom/node-exporter:v1.12.1
+    pid: host
+    read_only: true
+    command:
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.loadavg
+      - --collector.filesystem
+      - --collector.diskstats
+      - --collector.netdev
+      - --collector.uname
+      - --path.rootfs=/host/root
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      # Netlink sees the container namespace. Read the mounted host net procfs.
+      - --no-collector.netdev.netlink
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker|var/lib/containerd)($$|/)
+      - --collector.netdev.device-exclude=^(lo|veth.*|docker.*|br-.*)$$
+    volumes:
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      # /proc/net normally resolves to the reader's network namespace.
+      - /proc/1/net:/host/proc/net:ro
+      - /sys:/host/sys:ro
+    networks: [host-observability]
+    mem_limit: 128m
+
+  platform-prometheus:
+    <<: *runtime
+    image: prom/prometheus:v3.5.5
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - platform-prometheus-data:/prometheus
+    networks: [host-observability, platform-metrics]
+    mem_limit: 512m
+
+  platform-grafana:
+    <<: *runtime
+    image: grafana/grafana:12.4.10
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in the deployment environment.}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_SERVER_ROOT_URL: http://localhost:3002/
+    ports:
+      - "127.0.0.1:3002:3000"
+    volumes:
+      - platform-grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    # A non-internal network permits Docker's loopback host publication.
+    networks: [host-observability, grafana-access]
+    mem_limit: 512m
+
+volumes:
+  # Distinct from all retired centralization and application volumes.
+  platform-prometheus-data:
+  platform-grafana-data:
+
+networks:
+  host-observability:
+    internal: true
+  platform-metrics:
+    internal: true
+  grafana-access:

@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+  - name: Hetzner-One Prometheus
+    uid: hetzner-prometheus
+    type: prometheus
+    access: proxy
+    url: http://platform-prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

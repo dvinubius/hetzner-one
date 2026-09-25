@@ -4,6 +4,12 @@ set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_dir"
 
+mode=${1:-caddy}
+case "$mode" in
+ caddy|observability|full) ;;
+ *) printf 'Usage: %s [caddy|observability|full]\n' "$0" >&2; exit 2 ;;
+esac
+
 if [[ ! -f .env.production ]]; then
 	printf '%s\n' 'Copy .env.production.example to .env.production and set DEPLOY_HOST.' >&2
 	exit 1
@@ -12,6 +18,8 @@ set -a
 # shellcheck disable=SC1091
 source .env.production
 set +a
+grafana_admin_password=${GRAFANA_ADMIN_PASSWORD:-}
+unset GRAFANA_ADMIN_PASSWORD
 
 [[ -n ${DEPLOY_HOST:-} && $DEPLOY_HOST != your-vps-hostname-or-ip ]] || {
 	printf '%s\n' 'Set DEPLOY_HOST in .env.production.' >&2
@@ -48,15 +56,31 @@ stage="/opt/caddy/.staging/$stamp"
 
 printf 'Checking %s...\n' "$target"
 ssh "${ssh_options[@]}" "$target" \
-	"command -v docker >/dev/null && command -v curl >/dev/null && docker compose version >/dev/null && docker volume inspect zibs_caddy-data zibs_caddy-config >/dev/null && test -d /opt/art-gallery/public && install -d -m 0750 '$stage'"
+	"command -v flock >/dev/null && command -v docker >/dev/null && command -v curl >/dev/null && docker compose version >/dev/null && docker volume inspect zibs_caddy-data zibs_caddy-config >/dev/null && test -d /opt/art-gallery/public && install -d -m 0750 /opt/caddy/.staging && mkdir -m 0750 '$stage'"
 
-printf 'Staging Caddy configuration on %s...\n' "$target"
+if [[ $mode != caddy ]]; then
+ [[ ${#grafana_admin_password} -ge 20 && $grafana_admin_password != *$'\n'* && $grafana_admin_password != *$'\r'* && $grafana_admin_password != *"'"* ]] || {
+  printf '%s\n' "Set a single-line GRAFANA_ADMIN_PASSWORD of at least 20 characters without an apostrophe in .env.production." >&2
+  exit 1
+ }
+ ssh "${ssh_options[@]}" "$target" "command -v python3 >/dev/null"
+fi
+printf 'Staging %s configuration on %s...\n' "$mode" "$target"
+# Include the full payload for validation and rollback helpers, but activate
+# only the explicitly selected services. Never upload local secret files.
 rsync -aR -e "$ssh_command" \
-	Caddyfile Dockerfile compose.yaml scripts/activate.sh scripts/verify.sh \
-	"$target:$stage/"
+ Caddyfile Dockerfile compose.yaml compose.observability.yaml observability/ scripts/ \
+ "$target:$stage/"
 
-printf '%s\n' 'Validating, building, and activating Caddy on the VPS...'
+if [[ $mode != caddy ]]; then
+ # Single quotes keep $, #, backslashes, and double quotes literal in Compose .env.
+ printf "GRAFANA_ADMIN_PASSWORD='%s'\n" "$grafana_admin_password" | \
+  ssh "${ssh_options[@]}" "$target" "umask 077; cat > '$stage/.env'"
+ unset grafana_admin_password
+fi
+
+# Serialize all deployment modes on the VPS. Full activation is intentionally
+# staged: healthy monitoring can remain if the Caddy phase rolls back.
 ssh "${ssh_options[@]}" "$target" \
-	"bash '$stage/scripts/activate.sh' '$stamp' </dev/null"
-
-printf '%s\n' 'Caddy deployment succeeded.'
+ "flock -n /opt/caddy/.deploy.lock bash '$stage/scripts/activate-mode.sh' '$stamp' '$mode' </dev/null"
+printf '%s deployment succeeded. Rollback stamp: %s\n' "$mode" "$stamp"

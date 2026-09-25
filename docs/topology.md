@@ -1,17 +1,28 @@
 # Hetzner-One topology
 
 Hetzner-One owns shared Caddy ingress, its public ports, certificate storage,
-and the `zibs-edge` and `hooklook-edge` Docker networks. Upstream services run
+the `zibs-edge` and `hooklook-edge` Docker networks, and its platform monitoring. Upstream services run
 on the same VPS and are deployed by their respective projects.
+
+The diagram includes the prepared monitoring stack; its VPS rollout is pending.
+Application observability remains outside this repository.
 
 ```mermaid
 flowchart LR
     public["Public clients"] -->|"TCP 80/443 · UDP 443"| caddy
 
+    operator["Operator · SSH tunnel"] -->|"loopback :3002"| grafana
+
     subgraph platform["Hetzner-One · /opt/caddy"]
         caddy["Caddy · TLS and routing"]
         certificates[("Persistent certificate and config volumes")]
         gallery["Gallery files · read-only mount"]
+        grafana["Platform Grafana"]
+        prometheus["Platform Prometheus"]
+        node["Host node_exporter"]
+        grafana -->|"Query host and ingress metrics"| prometheus
+        prometheus -->|"Private scrape :9100"| node
+        prometheus -->|"Private scrape :9180"| caddy
         caddy --- certificates
         caddy -->|"art-gallery.dinubarbu.com · serve files"| gallery
     end
@@ -38,3 +49,6 @@ Caddy serves the gallery directly from `/opt/art-gallery/public`, mounted at
 See the [Caddyfile](../Caddyfile) for routes and request limits,
 [Compose configuration](../compose.yaml) for ports, mounts, and networks, and
 [deployment runbook](deployment-runbook.md) for ingress operation.
+
+Monitoring networking, retained state, and user-run rollout are documented in
+the [observability runbook](observability-runbook.md).

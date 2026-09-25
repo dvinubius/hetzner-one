@@ -50,13 +50,15 @@ fi
 cd "$stage"
 docker compose config --quiet
 docker compose build caddy
-docker compose run -T --rm --no-deps caddy caddy list-modules </dev/null | grep -x 'http.handlers.rate_limit' >/dev/null
-docker compose run -T --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile </dev/null
+docker run --rm --network none "$image" caddy list-modules </dev/null | grep -x 'http.handlers.rate_limit' >/dev/null
+docker run --rm --network none -v "$stage/Caddyfile:/etc/caddy/Caddyfile:ro" "$image" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile </dev/null
 
 activated=1
 for file in Caddyfile Dockerfile compose.yaml; do cp "$stage/$file" "$live/$file"; done
 cd "$live"
 docker compose up -d --no-deps --force-recreate caddy
 bash "$stage/scripts/verify.sh"
+install -d "$live/scripts"
+cp "$stage/scripts/verify.sh" "$live/scripts/verify.sh"
 activated=0
 printf 'Rollback files: %s\n' "$backup"

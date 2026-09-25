@@ -4,8 +4,8 @@
   reverse-proxy destinations.
 - [Deployment runbook](deployment-runbook.md) — deploy, verify, diagnose, and
   roll back Caddy.
-- [Host observability plan](../.agents/HOST-OBSERVABILITY-PLAN.md) — next step:
+- [Observability runbook](observability-runbook.md) — user-run platform deployment,
+  verification, dashboards, and recovery.
+- [Host observability plan](../.agents/HOST-OBSERVABILITY-PLAN.md) — implemented locally:
   independent platform Grafana, host metrics, and Caddy observability; not deployed.
-- [Collector centralization proposal](collector-centralization-plan.md) —
-  unscheduled future consideration, not the current deployment.
 - [rollouts/](rollouts/)

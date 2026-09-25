@@ -1,6 +1,8 @@
 .env.production
+/.env
 
 
 
 .devnotes
 docs/learning/*
+/secrets/
