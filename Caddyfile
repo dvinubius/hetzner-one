@@ -1,6 +1,8 @@
 {
 	# This listener is shared by every HTTPS host below. A larger header block is
-	# rejected by Caddy before it can reach any upstream service.
+	# rejected by Caddy before it can reach any upstream service. Go's HTTP/1.1
+	# parser adds a 4 KiB read-buffer allowance, so this setting's observed
+	# rejection boundary is approximately 36 KiB.
 	servers :443 {
 		max_header_size 32KiB
 	}
@@ -82,7 +84,7 @@ hooklook.app {
 		@hooklook_capture path_regexp hooklook_capture_route ^/b/[^/]+(?:/.*)?$
 		handle @hooklook_capture {
 			request_body {
-				max_size 256KiB
+				max_size 10MB
 			}
 			reverse_proxy hooklook:8080
 		}
