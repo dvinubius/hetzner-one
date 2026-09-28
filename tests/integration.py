@@ -148,14 +148,30 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         native_net = output('docker', 'run', '--rm', '--network', 'host', '--entrypoint', 'cat', CADDY, '/proc/net/dev')
         expected_devices = {line.split(':')[0].strip() for line in native_net.splitlines() if ':' in line}
         expected_devices = {device for device in expected_devices if not re.fullmatch(r'lo|veth.*|docker.*|br-.*', device)}
-        observed_devices = {row['metric']['device'] for row in query('node_network_receive_bytes_total{job="node"}')}
-        assert observed_devices == expected_devices, (observed_devices, expected_devices)
+        for metric in ('node_network_receive_bytes_total', 'node_network_up'):
+            observed_devices = {row['metric']['device'] for row in query(metric + '{job="node"}')}
+            assert observed_devices == expected_devices, (metric, observed_devices, expected_devices)
         print('PASS: exporter network interfaces match the native Docker host namespace', flush=True)
         assert query('node_filesystem_size_bytes{job="node",mountpoint="/"}')
+        assert query('node_boot_time_seconds{job="node"}')
+        assert query('node_processes_pids{job="node"}')
+        [uname] = query('node_uname_info{job="node"}')
+        assert uname['metric']['nodename'] == 'hetzner-one', uname
+        variables = {'$__rate_interval': '1m', '$job': 'node', '$node': uname['metric']['instance']}
+        def panels(items):
+            for panel in items:
+                yield panel
+                yield from panels(panel.get('panels', []))
         for uid in ('hetzner-host', 'hetzner-caddy'):
             dashboard = wait(lambda uid=uid: api('/api/dashboards/uid/' + uid)['dashboard'])
-            for panel in dashboard['panels']:
-                query(panel['targets'][0]['expr'].replace('$__rate_interval', '1m'))
+            for panel in panels(dashboard['panels']):
+                for target in panel.get('targets', []):
+                    expr = target['expr']
+                    for name, value in variables.items():
+                        expr = expr.replace(name, value)
+                    # $1 in label_replace is a capture group, not a variable.
+                    assert not re.search(r'\$\{?[A-Za-z_]', expr), (uid, panel['title'], expr)
+                    query(expr)
         print('PASS: actual exporters, Grafana auth/provisioning/datasource, all dashboard PromQL expressions', flush=True)
         # Exercise file ownership/state persistence and service scoping on restart.
         api('/api/user/preferences', payload={'theme': 'dark'}, method='PUT')

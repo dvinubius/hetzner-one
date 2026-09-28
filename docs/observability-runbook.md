@@ -141,13 +141,33 @@ docker stats --no-stream
 ```
 
 Expect both scrape jobs up, datasource health OK, two dashboards provisioned,
-login required, host CPU/memory/load/root/disk/network series present, bounded
-Caddy labels, and only loopback Grafana publication. Compare root filesystem
-capacity against `df -B1 /` and network device names against `ip -br link`.
-The verifier compares root capacity with host `statvfs` and interface names
-with `/proc/1/net/dev`. node_exporter disables the netlink netdev collector and
-mounts `/proc/1/net` at its procfs `net` path, avoiding the container namespace.
-Only CPU, memory, load, filesystem, disk, network, and uname collectors are enabled.
+login required, host CPU/memory/load/root/disk/network/uptime/process series
+present, bounded Caddy labels, and only loopback Grafana publication. Compare
+root filesystem capacity against `df -B1 /` and network device names against
+`ip -br link`. The verifier compares root capacity with host `statvfs`, and the
+netdev and netclass interface names with `/proc/1/net/dev`. node_exporter
+disables the netlink netdev collector and mounts `/proc/1/net` at its procfs
+`net` path, avoiding the container namespace.
+
+node_exporter runs its default collectors plus `processes`, for the Host
+dashboard. The `systemd` collector stays off because it would need the host
+D-Bus socket. Docker interfaces are excluded from netdev and netclass so
+container restarts do not add series.
+
+The Host dashboard is [Node Exporter Full](../observability/grafana/third-party/node-exporter-full/README.md),
+pinned to an upstream commit. Its first two rows are expanded; the other rows
+query only when opened. These panels are expected to be empty or partial:
+
+- Systemd, because that collector is off.
+- Hardware sensors, cooling, power supply, and CPU frequency, which a KVM VPS
+  usually does not expose.
+- NF Conntrack, whose `/proc/sys/net` values come from the exporter
+  container's network namespace and understate host usage.
+
+Pressure panels need a kernel with PSI enabled. Check the Pressure panel shows
+data after deployment, and check the host scrape size in Grafana's Explore view
+with `scrape_samples_scraped{job="node"}`; it must stay well below the
+`sample_limit` of 10000.
 
 From the workstation, use your actual VPS host and SSH identity:
 
@@ -229,6 +249,7 @@ avoid throttling your own session. Report the results before rollout acceptance.
 ## Dashboard changes and diagnostics
 
 Edit JSON in `observability/grafana/dashboards/`, validate it locally, then push
+(to update the Host dashboard, follow its [third-party notes](../observability/grafana/third-party/node-exporter-full/README.md))
 to `main`; the GitHub workflow deploys it in observability mode (see the
 [deployment runbook](deployment-runbook.md#how-a-push-deploys)). Provisioning is
 authoritative; UI saves are disabled. This operation restarts only the platform

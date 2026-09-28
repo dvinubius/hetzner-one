@@ -16,16 +16,13 @@ services:
     <<: *runtime
     image: prom/node-exporter:v1.12.1
     pid: host
+    # Reported as node_uname_info nodename; the default is the container ID.
+    hostname: hetzner-one
     read_only: true
     command:
-      - --collector.disable-defaults
-      - --collector.cpu
-      - --collector.meminfo
-      - --collector.loadavg
-      - --collector.filesystem
-      - --collector.diskstats
-      - --collector.netdev
-      - --collector.uname
+      # Default collectors plus processes feed the Node Exporter Full dashboard.
+      # systemd stays off: it would need the host D-Bus socket.
+      - --collector.processes
       - --path.rootfs=/host/root
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
@@ -33,6 +30,8 @@ services:
       - --no-collector.netdev.netlink
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker|var/lib/containerd)($$|/)
       - --collector.netdev.device-exclude=^(lo|veth.*|docker.*|br-.*)$$
+      # Each container restart would otherwise add new veth series.
+      - --collector.netclass.ignored-devices=^(lo|veth.*|docker.*|br-.*)$$
     volumes:
       - /:/host/root:ro,rslave
       - /proc:/host/proc:ro

@@ -77,19 +77,22 @@ def main():
         'node_filesystem_size_bytes{job="node",mountpoint="/",fstype!~"tmpfs|overlay"}',
         'node_disk_read_bytes_total{job="node",device!~"loop.*|ram.*"}',
         'node_network_receive_bytes_total{job="node",device!~"lo|veth.*|docker.*|br-.*"}',
+        'node_boot_time_seconds{job="node"}',
+        'node_processes_pids{job="node"}',
     ]
     for expr in required:
         assert query(expr), 'Missing host series: ' + expr
     native_net = Path('/proc/1/net/dev').read_text()
     expected_devices = {line.split(':')[0].strip() for line in native_net.splitlines() if ':' in line}
     expected_devices = {device for device in expected_devices if not re.fullmatch(r'lo|veth.*|docker.*|br-.*', device)}
-    observed_devices = {row['metric']['device'] for row in query('node_network_receive_bytes_total{job="node"}')}
-    assert observed_devices == expected_devices, 'Exporter interfaces differ from the host: ' + str((observed_devices, expected_devices))
+    for metric in ('node_network_receive_bytes_total', 'node_network_up'):
+        observed_devices = {row['metric']['device'] for row in query(metric + '{job="node"}')}
+        assert observed_devices == expected_devices, metric + ' interfaces differ from the host: ' + str((observed_devices, expected_devices))
     fs = os.statvfs('/')
     root_size = fs.f_blocks * fs.f_frsize
     sizes = query('node_filesystem_size_bytes{job="node",mountpoint="/",fstype!~"tmpfs|overlay"}')
     assert any(abs(float(row['value'][1]) - root_size) <= root_size * 0.01 for row in sizes), 'Exporter root capacity differs from host statvfs'
-    print('PASS: host CPU, memory, load, root capacity, disk, and actual host interfaces', flush=True)
+    print('PASS: host CPU, memory, load, root capacity, disk, uptime, processes, and actual host interfaces', flush=True)
     for uid in ('hetzner-host', 'hetzner-caddy'):
         wait_for(uid + ' provisioning', lambda uid=uid: api('/api/dashboards/uid/' + uid)['dashboard']['uid'] == uid)
     if not args.host_only:
