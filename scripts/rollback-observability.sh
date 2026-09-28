@@ -6,6 +6,8 @@ stamp=${1:?Usage: rollback-observability.sh YYYYMMDDTHHMMSSZ}
 cd /opt/caddy
 backup="/opt/caddy/rollback/$stamp/observability"
 [[ -d "$backup" ]] || { echo 'Backup not found.' >&2; exit 1; }
+# Live state no longer matches the last verified commit; the next CI run is full.
+rm -f .deploy/manifest
 compose=(docker compose -f compose.observability.yaml)
 services=(platform-node platform-prometheus platform-grafana)
 if [[ -f compose.observability.yaml ]]; then

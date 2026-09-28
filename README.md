@@ -32,7 +32,9 @@ The project owns both shared edge networks and reuses the existing certificate v
 
 ## Hooklook ingress policy
 
-The Caddy image is built on the VPS from Caddy `2.11.4` plus
+GitHub Actions builds the Caddy image and publishes it to GHCR as
+`ghcr.io/dvinubius/hetzner-one-caddy`; the VPS runs it by digest. It is Caddy
+`2.11.4` plus
 `github.com/mholt/caddy-ratelimit` at immutable commit
 `5625512f24f6f59d6f64fb3aafe5eecff0b286db` (published 2026-06-12, more than
 three weeks before this change). The module is a sliding-window limiter and
@@ -63,9 +65,19 @@ may affect future project-managed resources.
 
 ## Deploy
 
-Copy `.env.production.example` to the local, Git-ignored `.env.production` and
-set the VPS address. Set an independent `GRAFANA_ADMIN_PASSWORD` there before
-deploying observability. Then run:
+Pushes to `main` that change `Caddyfile`, `Dockerfile`, `compose.yaml`,
+`compose.observability.yaml`, or `observability/` deploy through the
+[`Deploy production`](.github/workflows/deploy.yml) GitHub Actions workflow.
+Other pushes start no run. The workflow tests the change, compares it with the
+last verified deployment recorded on the VPS, and runs only the affected mode:
+`caddy`, `observability`, or `full`. Caddy deployments use an image published
+to GHCR, rebuilt only when the Dockerfile changes.
+
+The workstation script stays for the first observability installation,
+Grafana password changes, and recovery. Copy `.env.production.example` to the
+local, Git-ignored `.env.production`, set the VPS address and deployment
+account, and set an independent `GRAFANA_ADMIN_PASSWORD` before deploying
+observability. Then run:
 
 ```bash
 ./scripts/deploy.sh caddy          # default; ingress only
@@ -73,10 +85,11 @@ deploying observability. Then run:
 ./scripts/deploy.sh full           # monitoring, then ingress, then verification
 ```
 
-The script stages, validates, activates, and checks the selected services. It saves
-rollback files and the previous running image on the VPS. Read the
-[deployment runbook](docs/deployment-runbook.md) for prerequisites, a Caddyfile
-reload, verification, diagnostics, and rollback. The [documentation index](docs/README.md)
+Both paths stage, validate, activate, and check the selected services with
+the same VPS scripts, saving rollback files and the previous running image.
+Read the [deployment runbook](docs/deployment-runbook.md) for one-time GitHub
+and VPS setup, prerequisites, a Caddyfile reload, verification, diagnostics,
+and rollback. The [documentation index](docs/README.md)
 routes to the current operational and historical records.
 
 ## License

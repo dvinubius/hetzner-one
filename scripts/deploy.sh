@@ -20,6 +20,8 @@ source .env.production
 set +a
 grafana_admin_password=${GRAFANA_ADMIN_PASSWORD:-}
 unset GRAFANA_ADMIN_PASSWORD
+# Optional GHCR digest for the Caddy phase; empty keeps the deployed image.
+caddy_image=${CADDY_IMAGE:-}
 
 [[ -n ${DEPLOY_HOST:-} && $DEPLOY_HOST != your-vps-hostname-or-ip ]] || {
 	printf '%s\n' 'Set DEPLOY_HOST in .env.production.' >&2
@@ -34,6 +36,16 @@ deploy_user=${DEPLOY_USER:-root}
 	printf '%s\n' 'DEPLOY_USER contains unsupported characters.' >&2
 	exit 1
 }
+if [[ -n $caddy_image ]]; then
+	[[ $mode != observability ]] || {
+		printf '%s\n' 'CADDY_IMAGE applies only to caddy and full deployments.' >&2
+		exit 1
+	}
+	[[ $caddy_image =~ ^ghcr\.io/[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_./-]*@sha256:[0-9a-f]{64}$ ]] || {
+		printf '%s\n' 'CADDY_IMAGE must be ghcr.io/<owner>/<name>@sha256:<digest>.' >&2
+		exit 1
+	}
+fi
 if [[ -n ${DEPLOY_SSH_KEY:-} && ! -r $DEPLOY_SSH_KEY ]]; then
 	printf '%s\n' 'DEPLOY_SSH_KEY does not name a readable file.' >&2
 	exit 1
@@ -69,7 +81,7 @@ printf 'Staging %s configuration on %s...\n' "$mode" "$target"
 # Include the full payload for validation and rollback helpers, but activate
 # only the explicitly selected services. Never upload local secret files.
 rsync -aR -e "$ssh_command" \
- Caddyfile Dockerfile compose.yaml compose.observability.yaml observability/ scripts/ \
+ Caddyfile compose.yaml compose.observability.yaml observability/ scripts/ \
  "$target:$stage/"
 
 if [[ $mode != caddy ]]; then
@@ -83,5 +95,6 @@ fi
 # staged: healthy monitoring can remain if the Caddy phase rolls back.
 # Remove the staged password even when the lock is refused before activation.
 ssh "${ssh_options[@]}" "$target" \
- "flock -n /opt/caddy/.deploy.lock bash '$stage/scripts/activate-mode.sh' '$stamp' '$mode' </dev/null; rc=\$?; rm -f '$stage/.env'; exit \$rc"
+ "flock -n /opt/caddy/.deploy.lock bash '$stage/scripts/activate-mode.sh' '$stamp' '$mode' '' '$caddy_image' </dev/null; rc=\$?; rm -f '$stage/.env'; exit \$rc"
 printf '%s deployment succeeded. Rollback stamp: %s\n' "$mode" "$stamp"
+printf '%s\n' 'The next GitHub deployment runs in full mode.'

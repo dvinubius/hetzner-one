@@ -112,7 +112,10 @@ Caddy is recreated, so a brief ingress interruption is possible. Routes,
 certificate volumes, and rate/body limits are preserved. The private-Grafana
 404 rule now uses a matched `handle` so it executes before the Zibs fallback.
 
-For subsequent combined updates, `./scripts/deploy.sh full` runs observability,
+Subsequent updates normally deploy by pushing to `main`: a push that changes
+`compose.observability.yaml` or `observability/` starts the GitHub workflow,
+which reuses the installed `/opt/caddy/.env` and picks the mode from the
+changed files. A `full` deployment, from either path, runs observability,
 then Caddy, then complete platform verification. This is a staged deployment,
 not an atomic transaction: a failed Caddy phase restores Caddy and leaves the
 healthy monitoring phase in place. A final combined-verification failure leaves
@@ -225,9 +228,11 @@ avoid throttling your own session. Report the results before rollout acceptance.
 
 ## Dashboard changes and diagnostics
 
-Edit JSON in `observability/grafana/dashboards/`, validate it locally, then run
-`./scripts/deploy.sh observability`. Provisioning is authoritative; UI saves are
-disabled. This operation restarts only the platform stack, not Caddy or apps.
+Edit JSON in `observability/grafana/dashboards/`, validate it locally, then push
+to `main`; the GitHub workflow deploys it in observability mode (see the
+[deployment runbook](deployment-runbook.md#how-a-push-deploys)). Provisioning is
+authoritative; UI saves are disabled. This operation restarts only the platform
+stack, not Caddy or apps.
 
 ```bash
 cd /opt/caddy
@@ -268,7 +273,8 @@ python3 scripts/verify-observability.py
 ```
 
 Rollback stops only platform services, archives the current failed data, and
-restores the cold snapshots and config. Metrics collected after the snapshot
+restores the cold snapshots and config. It also removes
+`/opt/caddy/.deploy/manifest`, so the next GitHub run deploys `main` in full. Metrics collected after the snapshot
 are absent from the restored TSDB but retained in the failed-state archive.
 The snapshot also restores the matching `.env`; reconcile the local
 `.env.production` before the next deployment if the password changed.
@@ -282,8 +288,9 @@ docker compose -f compose.observability.yaml rm -sf platform-grafana
 docker volume rm caddy_platform-grafana-data
 ```
 
-Then run `./scripts/deploy.sh observability`. Grafana re-bootstraps the admin
-account from the deployed password. Use `platform-prometheus` and
+Then run `./scripts/deploy.sh observability` from the workstation, which
+uploads the password (a GitHub deployment reuses the one on the VPS). Grafana
+re-bootstraps the admin account from the deployed password. Use `platform-prometheus` and
 `caddy_platform-prometheus-data` for Prometheus.
 
 For Caddy rollback use the [existing procedure](deployment-runbook.md#roll-back-after-a-successful-deployment).
@@ -294,12 +301,17 @@ Preserve both app edge networks and external certificate volumes. Never run
 
 ## Local validation
 
-With already age-checked images and Go available:
+With already age-checked images and Go available, build the local Caddy
+image, then run the tests:
 
 ```bash
+docker build --tag caddy-hooklook:2.11.4-ratelimit .
 python3 tests/integration.py
 python3 tests/deployment.py
+python3 tests/ci_deploy.py
 ```
+
+The GitHub workflow's `test` job runs the same three tests before any deployment.
 
 The integration test uses isolated local Docker resources, a mock upstream, and
 random loopback ports. It checks rejection boundaries, private/public routing,

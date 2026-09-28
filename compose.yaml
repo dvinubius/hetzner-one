@@ -2,11 +2,12 @@ name: caddy
 
 services:
   caddy:
-    # A distinct custom-image tag leaves the prior official image untouched as
-    # a safe rollback reference until the candidate has been verified.
+    # GitHub Actions builds the Dockerfile and publishes it to GHCR. On the VPS,
+    # deployment writes compose.override.yaml, which Compose merges
+    # automatically, to pin this service to the verified image digest. This
+    # tag is only the local test build, and the image of host-built installs
+    # that predate GHCR.
     image: caddy-hooklook:2.11.4-ratelimit
-    build:
-      context: .
     ports:
       - "80:80"
       - "443:443"

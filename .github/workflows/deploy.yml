@@ -1,0 +1,177 @@
+name: Deploy production
+
+# Pushes to main that change what the services run deploy every such change
+# since the last verified production deployment. Other pushes (scripts, docs,
+# tests, this workflow) start no run; they reach the VPS with the next
+# deployment, or with a manual run. Keep the paths in step with
+# scripts/classify-deploy.sh. See docs/deployment-runbook.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - Caddyfile
+      - Dockerfile
+      - compose.yaml
+      - compose.observability.yaml
+      - observability/**
+  workflow_dispatch:
+    inputs:
+      force_full:
+        description: Full deployment of the selected main commit (bootstrap or recovery)
+        type: boolean
+        default: true
+
+# One production run at a time, including classification. A newer pending run
+# replaces an older pending one; the manifest makes that safe.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Script syntax
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+          python3 -m py_compile scripts/verify-observability.py tests/*.py
+      - name: Deployment script tests
+        run: |
+          python3 tests/ci_deploy.py
+          python3 tests/deployment.py
+      - name: Compose files render
+        run: |
+          docker compose config --quiet
+          GRAFANA_ADMIN_PASSWORD=ci docker compose -f compose.observability.yaml config --quiet
+      # The same image and Caddyfile checks activate.sh runs on the VPS.
+      - name: Build Caddy and validate the Caddyfile
+        run: |
+          image=caddy-hooklook:2.11.4-ratelimit
+          docker build --tag "$image" .
+          docker run --rm --network none "$image" caddy list-modules | grep -x 'http.handlers.rate_limit'
+          docker run --rm --network none -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" "$image" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Ingress and observability integration test
+        run: |
+          go version
+          python3 tests/integration.py
+
+  plan:
+    needs: test
+    runs-on: ubuntu-24.04
+    environment: production
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install deployment SSH credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"$RUNNER_TEMP/known_hosts"
+      - name: Classify changes since the last verified deployment
+        id: classify
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full && 'full' || '' }}
+        run: |
+          mode=$(DEPLOY_SSH_KEY_FILE="$RUNNER_TEMP/deploy_key" \
+            DEPLOY_KNOWN_HOSTS_FILE="$RUNNER_TEMP/known_hosts" \
+            ./scripts/ci-deploy.sh plan "$GITHUB_SHA" $FORCE)
+          printf 'mode=%s\n' "$mode" >>"$GITHUB_OUTPUT"
+          printf 'Deployment mode for `%s`: **%s**\n' "$GITHUB_SHA" "$mode" >>"$GITHUB_STEP_SUMMARY"
+
+  image:
+    needs: plan
+    if: needs.plan.outputs.mode == 'caddy' || needs.plan.outputs.mode == 'full'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The Dockerfile pins Caddy and the module, so its Git blob names the
+      # image: a Caddyfile or Compose change reuses the published image.
+      - name: Build and push the image, or reuse it
+        id: push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repository="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hetzner-one-caddy"
+          tag="$repository:dockerfile-$(git rev-parse HEAD:Dockerfile)"
+          printf '%s\n' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if docker pull --quiet "$tag" 2>/dev/null; then
+            printf 'Reusing `%s`\n' "$tag" >>"$GITHUB_STEP_SUMMARY"
+          else
+            docker build --platform linux/amd64 \
+              --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --tag "$tag" .
+            docker push --quiet "$tag"
+          fi
+          image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")
+          [[ $image =~ ^${repository//./\\.}@sha256:[0-9a-f]{64}$ ]] || { echo "Unexpected digest: $image" >&2; exit 1; }
+          docker logout ghcr.io
+          # The same checks the VPS repeats before activation.
+          docker run --rm --network none "$image" caddy list-modules | grep -x 'http.handlers.rate_limit'
+          docker run --rm --network none -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" "$image" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          printf 'image=%s\n' "$image" >>"$GITHUB_OUTPUT"
+          printf 'Image `%s`\n' "$image" >>"$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: [plan, image]
+    if: >-
+      always() && needs.plan.result == 'success' && needs.plan.outputs.mode != 'none'
+      && (needs.image.result == 'success' || needs.image.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install deployment SSH credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"$RUNNER_TEMP/known_hosts"
+      - name: Deploy
+        env:
+          MODE: ${{ needs.plan.outputs.mode }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          export CADDY_IMAGE_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hetzner-one-caddy"
+          DEPLOY_SSH_KEY_FILE="$RUNNER_TEMP/deploy_key" \
+            DEPLOY_KNOWN_HOSTS_FILE="$RUNNER_TEMP/known_hosts" \
+            ./scripts/ci-deploy.sh deploy "$MODE" "$GITHUB_SHA" $IMAGE | tee "$RUNNER_TEMP/deploy.log"
+          stamp=$(sed -n 's/.*Rollback stamp: //p' "$RUNNER_TEMP/deploy.log" | tail -n 1)
+          printf 'Deployed `%s` in **%s** mode. Rollback stamp: `%s`\n' "$GITHUB_SHA" "$MODE" "$stamp" >>"$GITHUB_STEP_SUMMARY"
