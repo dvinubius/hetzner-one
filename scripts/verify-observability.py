@@ -2,6 +2,7 @@
 """Run on the VPS. Read-only checks; never generates large requests or bursts."""
 import argparse
 import base64
+from datetime import datetime
 import json
 import os
 import re
@@ -11,6 +12,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+
+def started_at(info):
+    # Docker reports nanoseconds; fromisoformat accepts at most microseconds.
+    stamp = re.sub(r'(\.\d{6})\d*', r'\1', info['State']['StartedAt']).replace('Z', '+00:00')
+    return datetime.fromisoformat(stamp).timestamp()
 
 
 def main():
@@ -44,11 +51,13 @@ def main():
         assert result['status'] == 'success', 'Prometheus query failed'
         return result['data']['result']
 
+    started = {}
     for service in ('platform-node', 'platform-prometheus', 'platform-grafana'):
         cid = subprocess.check_output(compose + ['ps', '-q', service], text=True).strip()
         assert cid, service + ' missing'
         info = json.loads(subprocess.check_output(['docker', 'inspect', cid], text=True))[0]
         assert info['State']['Running'], service + ' stopped'
+        started[service] = started_at(info)
         bindings = info['HostConfig'].get('PortBindings') or {}
         if service == 'platform-grafana':
             assert bindings == {'3000/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '3002'}]}, 'Unexpected Grafana publication'
@@ -68,8 +77,18 @@ def main():
         raise AssertionError('Grafana permits anonymous API access')
     print('PASS: anonymous dashboard access denied', flush=True)
     jobs = ['node'] if args.host_only else ['node', 'caddy']
+    # Samples from before a restart stay queryable for five minutes, so only a
+    # scrape newer than both the scraper and the scraped exporter counts.
+    # timestamp() gives sample time only when applied directly to a selector.
+    since = {'node': max(started['platform-node'], started['platform-prometheus'])}
+    if not args.host_only:
+        caddy = subprocess.check_output(['docker', 'compose', 'ps', '-q', 'caddy'], text=True).strip()
+        assert caddy, 'Caddy missing'
+        caddy_info = json.loads(subprocess.check_output(['docker', 'inspect', caddy], text=True))[0]
+        since['caddy'] = max(started_at(caddy_info), started['platform-prometheus'])
     for job in jobs:
-        wait_for(job + ' scrape', lambda job=job: bool(query(f'up{{job="{job}"}} == 1')))
+        wait_for(job + ' scrape since restart',
+                 lambda job=job: bool(query(f'up{{job="{job}"}} == 1 and timestamp(up{{job="{job}"}}) > {since[job]}')))
     required = [
         'node_cpu_seconds_total{job="node"}',
         'node_memory_MemAvailable_bytes{job="node"}',
@@ -96,10 +115,7 @@ def main():
     for uid in ('hetzner-host', 'hetzner-caddy'):
         wait_for(uid + ' provisioning', lambda uid=uid: api('/api/dashboards/uid/' + uid)['dashboard']['uid'] == uid)
     if not args.host_only:
-        caddy = subprocess.check_output(['docker', 'compose', 'ps', '-q', 'caddy'], text=True).strip()
-        assert caddy, 'Caddy missing'
-        info = json.loads(subprocess.check_output(['docker', 'inspect', caddy], text=True))[0]
-        assert set(info['HostConfig']['PortBindings']) == {'80/tcp', '443/tcp', '443/udp'}, 'Unexpected Caddy port publication'
+        assert set(caddy_info['HostConfig']['PortBindings']) == {'80/tcp', '443/tcp', '443/udp'}, 'Unexpected Caddy port publication'
         metrics = subprocess.check_output(['docker', 'exec', caddy, 'wget', '-qO-', 'http://127.0.0.1:9180/metrics'], text=True)
         series = [line for line in metrics.splitlines() if line and not line.startswith('#')]
         caddy_series = [line for line in series if line.startswith('caddy_')]

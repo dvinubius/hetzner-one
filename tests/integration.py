@@ -4,6 +4,7 @@ Uses a unique Compose project, private test state and random loopback ports.
 Never calls deploy.sh, SSH, or a production endpoint.
 """
 import base64
+from datetime import datetime
 import json
 import os
 import re
@@ -181,7 +182,14 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         grafana = 'http://127.0.0.1:' + port('platform-grafana', 3000)
         wait(lambda: api('/api/dashboards/uid/hetzner-host')['dashboard']['uid'] == 'hetzner-host')
         assert api('/api/user/preferences')['theme'] == 'dark'
-        print('PASS: observability recreation preserves Caddy and Grafana runtime preferences', flush=True)
+        # Pre-restart samples remain queryable; the verifier waits for a newer scrape.
+        def started_at(service):
+            stamp = output('docker', 'inspect', '--format', '{{.State.StartedAt}}', output(*compose, 'ps', '-q', service))
+            return datetime.fromisoformat(re.sub(r'(\.\d{6})\d*', r'\1', stamp).replace('Z', '+00:00')).timestamp()
+        since = max(started_at('platform-node'), started_at('platform-prometheus'))
+        wait(lambda: query(f'up{{job="node"}} == 1 and timestamp(up{{job="node"}}) > {since}'))
+        assert query(f'timestamp(node_boot_time_seconds{{job="node"}}) > {since}')
+        print('PASS: observability recreation preserves Caddy and Grafana runtime preferences; fresh scrape after restart', flush=True)
         # Exercise the real restore helper against this isolated project's state.
         import shutil
         stamp = '20260925T000000Z'
