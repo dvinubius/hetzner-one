@@ -203,6 +203,48 @@ for name, kwargs in [('no image deployed', {'previous': 'host'}),
     caddy_scenario(name, **{'previous': OLD_IMAGE, **kwargs}, expect_success=False)
 print('PASS: missing images, tags, tokens, failed pulls, and invalid Caddyfiles change nothing')
 
+# verify.sh checks the running container, public routes, and Caddy's error log.
+VERIFY_DOCKER = """#!/usr/bin/env bash
+case "$1 $2" in
+'compose ps') [[ $VERIFY_RUNNING == 1 ]] && echo container-1 ;;
+'inspect --format') echo 2026-09-28T19:48:41.123Z ;;
+'logs --since')
+ [[ $3 == 2026-09-28T19:48:41.123Z && $4 == container-1 ]] || exit 1
+ echo '{"level":"info","msg":"serving initial configuration"}' >&2
+ echo '{"level":"warn","msg":"HTTP/2 skipped because it requires TLS"}' >&2
+ [[ -z $VERIFY_LOG ]] || echo "$VERIFY_LOG" >&2 ;;
+esac
+"""
+with tempfile.TemporaryDirectory(prefix='hetzner-verify-test-') as tmp:
+    live = Path(tmp)
+    bin_dir = live / 'bin'
+    bin_dir.mkdir()
+    (bin_dir / 'docker').write_text(VERIFY_DOCKER)
+    (bin_dir / 'curl').write_text('#!/usr/bin/env bash\necho "${@: -1}" >> "$CURL_LOG"\n[[ "${@: -1}" != "$CURL_FAIL" ]]\n')
+    for tool in ('docker', 'curl'):
+        (bin_dir / tool).chmod(0o755)
+    script = live / 'verify.sh'
+    script.write_text((ROOT / 'scripts/verify.sh').read_text().replace('/opt/caddy', str(live)))
+
+    def verify(running='1', log='', curl_fail=''):
+        env = {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}', 'CURL_LOG': str(live / 'curl.log'),
+               'VERIFY_RUNNING': running, 'VERIFY_LOG': log, 'CURL_FAIL': curl_fail}
+        return subprocess.run(['bash', str(script)], env=env, capture_output=True, text=True)
+
+    result = verify()
+    assert result.returncode == 0, result.stderr
+    assert 'No Caddy errors logged since 2026-09-28T19:48:41.123Z' in result.stdout
+    assert len((live / 'curl.log').read_text().splitlines()) == 4
+    print('PASS: verify accepts a running Caddy with healthy routes and no logged errors')
+    for level in ('error', 'fatal', 'panic'):
+        entry = '{"level":"%s","logger":"tls.obtain","msg":"could not get certificate"}' % level
+        result = verify(log=entry)
+        assert result.returncode != 0 and 'could not get certificate' in result.stderr, level
+    print('PASS: verify fails on error, fatal, and panic entries since Caddy started')
+    assert verify(running='0').returncode != 0
+    assert verify(curl_fail='https://hooklook.app/health').returncode != 0
+    print('PASS: verify fails when Caddy is not running or a public route fails')
+
 # Exercise dispatch order with harmless activation fixtures.
 with tempfile.TemporaryDirectory(prefix='hetzner-mode-test-') as tmp:
     live = Path(tmp)

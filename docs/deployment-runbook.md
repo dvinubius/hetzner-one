@@ -324,22 +324,44 @@ docker compose exec caddy caddy reload \
   --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
-Then run the public checks below and `rm -f /opt/caddy/.deploy/manifest` so
-the next GitHub run redeploys in full. Copy the current Caddyfile before
-editing it so it can be restored if validation or verification fails.
+Then run `bash /opt/caddy/scripts/verify.sh` (see
+[Verify and diagnose](#verify-and-diagnose)) and
+`rm -f /opt/caddy/.deploy/manifest` so the next GitHub run redeploys in full.
+Copy the current Caddyfile before editing it so it can be restored if
+validation or verification fails.
 
 ## Verify and diagnose
 
-On the VPS:
+Every Caddy deployment, from GitHub or a workstation, ends by running
+[`scripts/verify.sh`](../scripts/verify.sh) on the VPS and rolls back if it
+fails. A successful run in `caddy` or `full` mode has therefore passed these
+checks:
+
+- the `caddy` container is running;
+- `https://zibs.app/`, `https://art-gallery.dinubarbu.com/`,
+  `https://art-gallery.dinubarbu.com/drawings/`, and
+  `https://hooklook.app/health` succeed;
+- Caddy has logged no `error`, `fatal`, or `panic` entry since the container
+  started. Rate-limit and body-limit rejections log below error level, so
+  entries point to TLS, configuration, or 5xx upstream failures.
+
+The deployment installs the script at `/opt/caddy/scripts/verify.sh`. To run
+the same checks at any time, on the VPS:
+
+```bash
+bash /opt/caddy/scripts/verify.sh
+```
+
+It prints up to 20 offending log entries. Long after a deployment, the log
+window can include upstream errors from an application restart, such as a
+Hooklook or zibs deployment; judge those by their timestamps. If a check
+fails, diagnose with:
 
 ```bash
 cd /opt/caddy
 docker compose ps
 docker compose logs --tail=100 caddy
-curl --fail -I https://zibs.app/
-curl --fail -I https://art-gallery.dinubarbu.com/
-curl --fail -I https://art-gallery.dinubarbu.com/drawings/
-curl --fail -I https://hooklook.app/health
+curl -sS -o /dev/null -w '%{http_code}\n' https://hooklook.app/health
 ```
 
 If Caddy is running but an application route returns `502`, inspect its Docker
@@ -378,7 +400,7 @@ docker compose up -d --no-deps --force-recreate caddy
 rm -f .deploy/manifest
 ```
 
-Then repeat the public checks above. The restored `compose.override.yaml` names
+Then run `bash /opt/caddy/scripts/verify.sh`. The restored `compose.override.yaml` names
 the previous digest; Compose pulls it from GHCR if the VPS no longer has it.
 Removing the manifest makes the next GitHub run a full deployment of `main`,
 so push the fix or revert before anything else reaches `main`. The
