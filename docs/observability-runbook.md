@@ -156,13 +156,13 @@ container restarts do not add series.
 
 The Host dashboard is [Node Exporter Full](../observability/grafana/third-party/node-exporter-full/README.md),
 pinned to an upstream commit. Its first two rows are expanded; the other rows
-query only when opened. These panels are expected to be empty or partial:
-
-- Systemd, because that collector is off.
-- Hardware sensors, cooling, power supply, and CPU frequency, which a KVM VPS
-  usually does not expose.
-- NF Conntrack, whose `/proc/sys/net` values come from the exporter
-  container's network namespace and understate host usage.
+query only when opened. Panels this VPS cannot populate are removed:
+Systemd, hardware sensors and cooling, power supply, CPU frequency, IRQ
+detail, and the TCP Stat panels. `tcpstat` stays off because its netlink query
+sees only the exporter container's sockets; host TCP counts are in TCP
+Connections and Sockstat TCP. NF Conntrack remains but understates host usage:
+its `/proc/sys/net` values come from the exporter container's network
+namespace.
 
 Pressure panels need a kernel with PSI enabled. Check the Pressure panel shows
 data after deployment, and check the host scrape size in Grafana's Explore view

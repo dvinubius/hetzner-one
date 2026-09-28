@@ -16,6 +16,12 @@ Hetzner-One changes, and nothing else:
   provisioned dashboard.
 - The `ds_prometheus` variable defaults to the `hetzner-prometheus` datasource.
 - A dashboard `description` names this source and the empty panels.
+- Panels this VPS cannot populate are removed: the Systemd and Hardware Misc
+  rows with all their panels, CPU Frequency Scaling, IRQ Detail, and the TCP
+  Stat Persistent, TCP Stat Transient, and TCP Socket Queue panels
+  (`tcpstat` would report only the exporter container's sockets). The
+  remaining panels in System Misc and Network Netstat are reflowed two per
+  line, and the rows below each removed row move up one grid unit.
 - The NF Conntrack panel description notes that its values come from the
   exporter container's network namespace.
 
