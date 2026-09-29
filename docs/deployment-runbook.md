@@ -78,6 +78,49 @@ or `observability/`. Pushes that change only scripts, the workflow, tests, or
 docs start no run; that machinery reaches the VPS with the next deployment. To
 roll out such a change on its own, [run the workflow manually](#run-a-deployment-manually).
 
+```mermaid
+flowchart LR
+  subgraph image["1 · Image: GHCR only"]
+    direction TB
+    i1["Name the tag after<br/>the Dockerfile's Git blob"] --> i2{"Tag already<br/>in GHCR?"}
+    i2 -- yes --> i3["Pull the<br/>published image"]
+    i2 -- no --> i4["Build for<br/>linux/amd64"]
+    i4 --> i5["Check the rate-limit<br/>module, then push"]
+    i3 --> i6["Output the<br/>@sha256 digest"]
+    i5 --> i6
+  end
+  subgraph test["2 · Test: no VPS contact"]
+    direction TB
+    t1["Script syntax"] --> t2["CI and deployment script<br/>tests, fake SSH and Docker"]
+    t2 --> t3["Render both<br/>Compose files"]
+    t3 --> t4["Pull the digest,<br/>tag it locally"]
+    t4 --> t5["Rate-limit module check,<br/>caddy validate"]
+    t5 --> t6["Integration test: ingress,<br/>metrics, monitoring"]
+  end
+  subgraph plan["3 · Plan: read-only SSH"]
+    direction TB
+    p1["Install the SSH key<br/>and pinned host key"] --> p2["Read the VPS manifest:<br/>last verified commit"]
+    p2 --> p3{"Manual run<br/>with force_full?"}
+    p3 -- no --> p4["classify-deploy.sh: paths<br/>changed since that commit"]
+    p3 -- yes --> p5["Mode: none, caddy,<br/>observability, or full"]
+    p4 --> p5
+  end
+  subgraph deploy["4 · Deploy: VPS changes"]
+    direction TB
+    d1["Confirm the commit is<br/>still the head of main"] --> d2["Check VPS prerequisites,<br/>upload bundle to staging"]
+    d2 --> d3["Take the host lock,<br/>run activate-mode.sh"]
+    d3 --> d4["Observability phase:<br/>snapshot, recreate, verify<br/>(observability, full)"]
+    d4 --> d5["Caddy phase: pull digest,<br/>recreate, verify.sh<br/>(caddy, full)"]
+    d5 --> d6["Full mode: complete verification;<br/>then write the manifest"]
+  end
+  image --> test --> plan
+  plan -- "unless mode is none" --> deploy
+  image -. digest .-> deploy
+```
+
+Each phase that runs rolls back its own services if it fails, and the manifest
+is written only after every phase passed.
+
 1. **Image.** The Dockerfile pins Caddy and the rate-limit module, so its Git
    blob identifies the image:
    `ghcr.io/dvinubius/hetzner-one-caddy:dockerfile-<blob>`. If that tag
