@@ -96,11 +96,11 @@ not per site and ignore it.
 | 413 and 429 responses (5m) | Are Hooklook's limits biting? | Empty or rare |
 | Middleware errors by site | Is Caddy itself failing requests? | Near zero, apart from gallery 404s and Hooklook 429s |
 | Reverse-proxy upstream state | What does Caddy believe about each upstream? | 1, but see scenario 1: this proves little |
+| Caddy scrape availability | Can Prometheus read Caddy at all? | Flat at 1 |
 | p95 request duration | How long do whole requests take? | Low; Hooklook may sit at 10 s because of streams |
 | p95 time to first byte | How quickly do apps start answering? | Well under a second |
 | Data transfer rate | How many bytes go in and out, per site? | Gallery dominates outbound when people browse |
 | Requests in flight | What is open right now? | Near zero; Hooklook holds its open streams |
-| Caddy scrape availability | Can Prometheus read Caddy at all? | Flat at 1 |
 | Distributions row (heatmaps) | What is the full shape behind the averages? | Stable bands |
 | Caddy process row | Is Caddy itself healthy as a process? | Flat memory, goroutines tracking load |
 

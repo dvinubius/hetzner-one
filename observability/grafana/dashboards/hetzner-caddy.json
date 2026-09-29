@@ -651,7 +651,7 @@
       "gridPos": {
         "x": 0,
         "y": 20,
-        "w": 12,
+        "w": 8,
         "h": 8
       }
     },
@@ -665,9 +665,9 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 20,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "targets": [
@@ -675,6 +675,54 @@
           "refId": "A",
           "expr": "caddy_reverse_proxy_upstreams_healthy{job=\"caddy\"}",
           "legendFormat": "{{upstream}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Caddy scrape availability",
+      "description": "Scrape availability only; verify HTTPS separately.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"caddy\"}",
+          "legendFormat": "{{instance}}"
         }
       ],
       "fieldConfig": {
@@ -914,61 +962,13 @@
       }
     },
     {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Caddy scrape availability",
-      "description": "Scrape availability only; verify HTTPS separately.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "hetzner-prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 44,
-        "w": 24,
-        "h": 6
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "up{job=\"caddy\"}",
-          "legendFormat": "{{instance}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "showPoints": "never",
-            "fillOpacity": 10,
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
       "id": 19,
       "type": "row",
       "title": "Distributions (filtered by Site)",
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 44,
         "w": 24,
         "h": 1
       },
@@ -1032,7 +1032,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 45,
             "w": 12,
             "h": 8
           }
@@ -1096,7 +1096,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 51,
+            "y": 45,
             "w": 12,
             "h": 8
           }
@@ -1160,7 +1160,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 59,
+            "y": 53,
             "w": 12,
             "h": 8
           }
@@ -1224,7 +1224,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 59,
+            "y": 53,
             "w": 12,
             "h": 8
           }
@@ -1238,7 +1238,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 45,
         "w": 24,
         "h": 1
       },
@@ -1286,7 +1286,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 52,
+            "y": 46,
             "w": 12,
             "h": 8
           }
@@ -1339,7 +1339,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 52,
+            "y": 46,
             "w": 12,
             "h": 8
           }
@@ -1392,7 +1392,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 60,
+            "y": 54,
             "w": 12,
             "h": 8
           }
@@ -1440,7 +1440,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 60,
+            "y": 54,
             "w": 12,
             "h": 8
           }
