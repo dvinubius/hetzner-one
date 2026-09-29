@@ -40,7 +40,7 @@ GitHub Actions builds the Caddy image and publishes it to GHCR as
 three weeks before this change). The module is a sliding-window limiter and
 automatically returns `429 Too Many Requests` with `Retry-After`.
 
-- `GET /` is limited per direct socket-peer IP to 10 requests per minute.
+- `GET /` is limited per direct socket-peer IP to 20 requests per minute.
 - Public captures at `/b/{code}` and `/b/{code}/...` are limited per direct
   socket-peer IP to 60 per minute, with a separately enforced 20-request
   maximum in every 20-second window. This is an explicit bounded-burst policy,

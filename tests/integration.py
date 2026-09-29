@@ -115,7 +115,7 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         wait(lambda: request('/health') == 200)
         assert request('/b/test', b'x' * 10000000) == 200
         assert request('/b/test', b'x' * 10000001) == 413
-        assert [request('/') for _ in range(11)] == [200] * 10 + [429]
+        assert [request('/') for _ in range(21)] == [200] * 20 + [429]
         assert request('/health', headers={'X-Large': 'x' * 40000}) == 431
         assert request('/login', headers={'Host': 'zibs.app'}) == 404
         assert request('/public-dashboards/test', headers={'Host': 'zibs.app'}) == 200

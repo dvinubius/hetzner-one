@@ -66,7 +66,7 @@ Requests use `Host: hooklook.app` unless noted.
 | `/health` | 200 | Proxying reaches the upstream. |
 | `POST /b/test`, exactly 10,000,000 bytes | 200 | `request_body max_size 10MB` admits the limit. |
 | The same, one byte more | 413 | …and rejects one byte over it. |
-| 11 × `GET /` | ten 200, then 429 | The `hooklook_create` zone: 10 per minute per client. |
+| 21 × `GET /` | twenty 200, then 429 | The `hooklook_create` zone: 20 per minute per client. |
 | `/health` with a 40 KB header | 431 | `max_header_size 32KiB`; Go's parser allows about 4 KiB more, so the real boundary is about 36 KiB. |
 | `zibs.app/login` | 404 | Private Grafana routes are answered by Caddy and reach no upstream. |
 | `zibs.app/public-dashboards/test` | 200 | The public shared-dashboard route is proxied. |
