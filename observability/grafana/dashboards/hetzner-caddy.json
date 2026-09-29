@@ -1,7 +1,7 @@
 {
   "uid": "hetzner-caddy",
   "title": "Hetzner-One \u00b7 Caddy",
-  "description": "Shared ingress only. Top-level subroute metrics count each HTTPS request once. No raw paths, client IPs, or per-key rate-limit metrics.",
+  "description": "Shared ingress only. Top-level subroute metrics count each HTTPS request once. No raw paths, client IPs, or per-key rate-limit metrics. Guide: docs/observability-guide.md.",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
@@ -17,6 +17,358 @@
   "panels": [
     {
       "id": 1,
+      "type": "stat",
+      "title": "Request rate",
+      "description": "Mean requests per second over the selected time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__range]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "4xx share",
+      "description": "Share of responses with a 4xx status over the selected time range. Scanners and rate limiting raise it; it has no universal healthy value.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"4..\"}[$__range])) or vector(0)) / sum(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__range]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "5xx share",
+      "description": "Share of responses with a 5xx status over the selected time range, from upstreams and Caddy alike.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"5..\"}[$__range])) or vector(0)) / sum(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__range]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.001
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Middleware errors",
+      "description": "Errors raised inside Caddy over the selected time range: unreachable upstreams, rate and body limits, missing gallery files. A status an app returns is not counted.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(sum(increase(caddy_http_request_errors_total{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__range]))) or vector(0)",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Data sent",
+      "description": "Response body bytes sent to clients over the selected time range, after compression. Excludes headers and TLS overhead.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(caddy_http_response_size_bytes_sum{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__range]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "In flight now",
+      "description": "Requests Caddy is handling at the last scrape, including open Hooklook event streams.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(caddy_http_requests_in_flight{job=\"caddy\",handler=\"subroute\",host=~\"$host\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": 7,
       "type": "timeseries",
       "title": "Caddy scrape availability",
       "description": "Scrape availability only; verify HTTPS separately.",
@@ -26,7 +378,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 4,
         "w": 12,
         "h": 8
       },
@@ -64,7 +416,7 @@
       }
     },
     {
-      "id": 2,
+      "id": 8,
       "type": "timeseries",
       "title": "Requests by site",
       "description": "One top-level subroute sample per HTTPS request in the pinned build; excludes metrics listener and redirects.",
@@ -74,14 +426,14 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 4,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval]))",
+          "expr": "sum by(host)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
           "legendFormat": "{{host}}"
         }
       ],
@@ -112,7 +464,7 @@
       }
     },
     {
-      "id": 3,
+      "id": 9,
       "type": "timeseries",
       "title": "Responses by status class",
       "description": "Uses histogram count because requests_total lacks the status label.",
@@ -122,14 +474,14 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 12,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host,status_class)(label_replace(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval]),\"status_class\",\"$1xx\",\"code\",\"([1-5])[0-9][0-9]\"))",
+          "expr": "sum by(host,status_class)(label_replace(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]),\"status_class\",\"${1}xx\",\"code\",\"([1-5])[0-9][0-9]\"))",
           "legendFormat": "{{host}} {{status_class}}"
         }
       ],
@@ -160,7 +512,7 @@
       }
     },
     {
-      "id": 4,
+      "id": 10,
       "type": "timeseries",
       "title": "4xx and 5xx responses",
       "description": "Includes upstream responses and Caddy-generated rejection responses.",
@@ -170,14 +522,14 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 12,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\",code=~\"4..|5..\"}[$__rate_interval]))",
+          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"4..|5..\"}[$__rate_interval]))",
           "legendFormat": "{{host}} {{code}}"
         }
       ],
@@ -208,24 +560,120 @@
       }
     },
     {
-      "id": 5,
+      "id": 11,
       "type": "timeseries",
-      "title": "p95 request latency",
-      "description": "Full request duration; no value until traffic has been observed.",
+      "title": "Middleware errors by site",
+      "description": "Errors raised inside Caddy: unreachable upstream (502), upstream timeout (504), rate limit (429), body limit (413), and missing files on the gallery (404). A status an app returns itself, such as its own 500 or 404, is not counted.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(host)(rate(caddy_http_request_errors_total{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+          "legendFormat": "{{host}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "502 and 504 responses",
+      "description": "Traffic-based upstream failure indicator; use together with external health checks.",
       "datasource": {
         "type": "prometheus",
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 0,
-        "y": 16,
+        "x": 12,
+        "y": 20,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95,sum by(host,le)(rate(caddy_http_request_duration_seconds_bucket{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval])))",
+          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"502|504\"}[$__rate_interval]))",
+          "legendFormat": "{{host}} {{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "p95 request duration",
+      "description": "Full request duration, from request to last byte. Hooklook event streams last until the client leaves and land above the 10 s top bucket, pulling p95 up; compare with p95 time to first byte.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(host,le)(rate(caddy_http_request_duration_seconds_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval])))",
           "legendFormat": "{{host}}"
         }
       ],
@@ -256,78 +704,138 @@
       }
     },
     {
-      "id": 6,
+      "id": 14,
       "type": "timeseries",
-      "title": "Mean request size",
-      "description": "Includes request headers; rejected bodies may not be fully consumed.",
+      "title": "p95 time to first byte",
+      "description": "Time until the handler chain writes the response header. Unaffected by long streams. Caddy-generated error responses and client aborts record no sample.",
       "datasource": {
         "type": "prometheus",
         "uid": "hetzner-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(host,le)(rate(caddy_http_response_duration_seconds_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval])))",
+          "legendFormat": "{{host}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
       },
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 28,
         "w": 12,
         "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by(host)(rate(caddy_http_request_size_bytes_sum{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval])) / sum by(host)(rate(caddy_http_request_size_bytes_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval]))",
-          "legendFormat": "{{host}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "showPoints": "never",
-            "fillOpacity": 10,
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
       }
     },
     {
-      "id": 7,
+      "id": 15,
       "type": "timeseries",
-      "title": "Mean response size",
-      "description": "Response bytes emitted to the client.",
+      "title": "Data transfer rate",
+      "description": "Inbound (up) is Caddy's estimate from request headers and Content-Length; chunked uploads are undercounted and rejected bodies are still counted. Outbound (down) is response body bytes after compression, excluding headers and TLS.",
       "datasource": {
         "type": "prometheus",
         "uid": "hetzner-prometheus"
       },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(host)(rate(caddy_http_request_size_bytes_sum{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+          "legendFormat": "{{host}} in"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(host)(rate(caddy_http_response_size_bytes_sum{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+          "legendFormat": "{{host}} out"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* out$"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 36,
         "w": 12,
         "h": 8
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Requests in flight",
+      "description": "Sampled every 15 s. Open Hooklook event streams count for as long as they stay open.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host)(rate(caddy_http_response_size_bytes_sum{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval])) / sum by(host)(rate(caddy_http_response_size_bytes_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\"}[$__rate_interval]))",
+          "expr": "sum by(host)(caddy_http_requests_in_flight{job=\"caddy\",handler=\"subroute\",host=~\"$host\"})",
           "legendFormat": "{{host}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
+          "unit": "short",
           "color": {
             "mode": "palette-classic"
           },
@@ -349,10 +857,16 @@
         "tooltip": {
           "mode": "multi"
         }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
       }
     },
     {
-      "id": 8,
+      "id": 17,
       "type": "timeseries",
       "title": "413 and 429 responses (5m)",
       "description": "Validated locally with controlled Caddy rejections. Not zone-specific; upstreams can return these codes too. 431 parser rejections require a separate synthetic check.",
@@ -361,15 +875,15 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 12,
-        "y": 24,
+        "x": 0,
+        "y": 44,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host,code)(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\",code=~\"413|429\"}[5m]))",
+          "expr": "sum by(host,code)(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"413|429\"}[5m]))",
           "legendFormat": "{{host}} {{code}}"
         }
       ],
@@ -400,7 +914,7 @@
       }
     },
     {
-      "id": 9,
+      "id": 18,
       "type": "timeseries",
       "title": "Reverse-proxy upstream state",
       "description": "Caddy internal state; no active health checks are configured, so 1 is not proof the upstream is reachable.",
@@ -409,8 +923,8 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 0,
-        "y": 32,
+        "x": 12,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -448,52 +962,534 @@
       }
     },
     {
-      "id": 10,
-      "type": "timeseries",
-      "title": "502 and 504 responses",
-      "description": "Traffic-based upstream failure indicator; use together with external health checks.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "hetzner-prometheus"
-      },
+      "id": 19,
+      "type": "row",
+      "title": "Distributions (filtered by Site)",
+      "collapsed": true,
       "gridPos": {
-        "x": 12,
-        "y": 32,
-        "w": 12,
-        "h": 8
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 1
       },
-      "targets": [
+      "panels": [
         {
-          "refId": "A",
-          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"zibs.app|hooklook.app|art-gallery.dinubarbu.com\",code=~\"502|504\"}[$__rate_interval]))",
-          "legendFormat": "{{host}} {{code}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": {
-            "mode": "palette-classic"
+          "id": 20,
+          "type": "heatmap",
+          "title": "Request duration",
+          "description": "Requests per duration bucket, 5 ms to 10 s. Anything longer, such as an event stream, fills the top row.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
           },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "showPoints": "never",
-            "fillOpacity": 10,
-            "spanNulls": false
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by(le)(increase(caddy_http_request_duration_seconds_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+              "format": "heatmap",
+              "legendFormat": "{{le}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": {
+                  "type": "linear"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "yAxis": {
+              "axisPlacement": "left",
+              "unit": "s"
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "color": {
+              "mode": "scheme",
+              "scheme": "Oranges",
+              "scale": "exponential",
+              "exponent": 0.5,
+              "steps": 64,
+              "reverse": false
+            },
+            "legend": {
+              "show": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "yHistogram": true,
+              "showColorScale": false
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 53,
+            "w": 12,
+            "h": 8
           }
         },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        {
+          "id": 21,
+          "type": "heatmap",
+          "title": "Time to first byte",
+          "description": "Requests per time-to-first-byte bucket. Caddy-generated errors and client aborts are absent.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by(le)(increase(caddy_http_response_duration_seconds_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+              "format": "heatmap",
+              "legendFormat": "{{le}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": {
+                  "type": "linear"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "yAxis": {
+              "axisPlacement": "left",
+              "unit": "s"
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "color": {
+              "mode": "scheme",
+              "scheme": "Oranges",
+              "scale": "exponential",
+              "exponent": 0.5,
+              "steps": 64,
+              "reverse": false
+            },
+            "legend": {
+              "show": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "yHistogram": true,
+              "showColorScale": false
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 53,
+            "w": 12,
+            "h": 8
+          }
         },
-        "tooltip": {
-          "mode": "multi"
+        {
+          "id": 22,
+          "type": "heatmap",
+          "title": "Response size",
+          "description": "Responses per body-size bucket after compression, 256 B to 4 MiB; larger bodies fill the top row.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by(le)(increase(caddy_http_response_size_bytes_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+              "format": "heatmap",
+              "legendFormat": "{{le}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": {
+                  "type": "linear"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "yAxis": {
+              "axisPlacement": "left",
+              "unit": "bytes"
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "color": {
+              "mode": "scheme",
+              "scheme": "Oranges",
+              "scale": "exponential",
+              "exponent": 0.5,
+              "steps": 64,
+              "reverse": false
+            },
+            "legend": {
+              "show": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "yHistogram": true,
+              "showColorScale": false
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 61,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 23,
+          "type": "heatmap",
+          "title": "Request size",
+          "description": "Requests per estimated size bucket (headers plus Content-Length), 256 B to 4 MiB. Bodies above 4 MiB, including rejected ones, fill the top row.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by(le)(increase(caddy_http_request_size_bytes_bucket{job=\"caddy\",handler=\"subroute\",host=~\"$host\"}[$__rate_interval]))",
+              "format": "heatmap",
+              "legendFormat": "{{le}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": {
+                  "type": "linear"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "yAxis": {
+              "axisPlacement": "left",
+              "unit": "bytes"
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "color": {
+              "mode": "scheme",
+              "scheme": "Oranges",
+              "scale": "exponential",
+              "exponent": 0.5,
+              "steps": 64,
+              "reverse": false
+            },
+            "legend": {
+              "show": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "yHistogram": true,
+              "showColorScale": false
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 61,
+            "w": 12,
+            "h": 8
+          }
         }
-      }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "row",
+      "title": "Caddy process",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 25,
+          "type": "timeseries",
+          "title": "Caddy CPU",
+          "description": "CPU time used by the Caddy process; 100% is one full core. TLS handshakes cost CPU without being counted as requests.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "rate(process_cpu_seconds_total{job=\"caddy\"}[$__rate_interval])",
+              "legendFormat": "CPU"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "showPoints": "never",
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 54,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 26,
+          "type": "timeseries",
+          "title": "Caddy memory",
+          "description": "The Caddy container has no memory limit; compare with host memory on the Host dashboard.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "process_resident_memory_bytes{job=\"caddy\"}",
+              "legendFormat": "resident"
+            },
+            {
+              "refId": "B",
+              "expr": "go_memstats_heap_inuse_bytes{job=\"caddy\"}",
+              "legendFormat": "Go heap in use"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "showPoints": "never",
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 54,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 27,
+          "type": "timeseries",
+          "title": "Goroutines and open files",
+          "description": "Both grow with open connections, including idle keep-alive and event-stream connections.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "go_goroutines{job=\"caddy\"}",
+              "legendFormat": "goroutines"
+            },
+            {
+              "refId": "B",
+              "expr": "process_open_fds{job=\"caddy\"}",
+              "legendFormat": "open file descriptors"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "showPoints": "never",
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 62,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 28,
+          "type": "timeseries",
+          "title": "Caddy uptime",
+          "description": "Drops to zero whenever the Caddy container restarts, including every Caddy deployment.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "hetzner-prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "time() - process_start_time_seconds{job=\"caddy\"}",
+              "legendFormat": "uptime"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "showPoints": "never",
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 62,
+            "w": 12,
+            "h": 8
+          }
+        }
+      ]
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "label": "Site",
+        "type": "custom",
+        "query": "zibs.app,hooklook.app,art-gallery.dinubarbu.com",
+        "multi": true,
+        "includeAll": true,
+        "allValue": "zibs.app|hooklook.app|art-gallery.dinubarbu.com",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "zibs.app",
+            "value": "zibs.app"
+          },
+          {
+            "selected": false,
+            "text": "hooklook.app",
+            "value": "hooklook.app"
+          },
+          {
+            "selected": false,
+            "text": "art-gallery.dinubarbu.com",
+            "value": "art-gallery.dinubarbu.com"
+          }
+        ]
+      }
+    ]
+  }
 }

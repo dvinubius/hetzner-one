@@ -241,6 +241,14 @@ The verifier checks sensitive label names on `caddy_*` series; the Go runtime's
 The upstream-state gauge has no active health check configured and cannot prove
 availability. Public HTTPS checks provide that independent signal.
 
+The Caddy dashboard's **Site** selector filters every per-site panel; its All
+value keeps the explicit three-host allowlist. Summary stats cover the selected
+time range. The middleware-error panels count errors raised inside Caddy
+(unreachable upstreams, 413/429 limits, missing gallery files), never a status
+an app returns. Heatmaps and the Caddy process row are collapsed and query
+only when opened. The [observability guide](observability-guide.md) explains
+how to read each panel, with investigation scenarios.
+
 Do not run bursts or large uploads during routine deploys. If confirming
 boundaries on production, run the existing Hooklook public verifier once from
 a trusted workstation using its app runbook. Coordinate rate-limit tests to

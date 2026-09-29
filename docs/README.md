@@ -6,4 +6,6 @@
   deployment, one-time setup, verification, diagnosis, and Caddy rollback.
 - [Observability runbook](observability-runbook.md) — user-run platform deployment,
   verification, dashboards, and recovery.
+- [Observability guide](observability-guide.md) — reading the Caddy dashboard:
+  what each panel measures and scenario-based investigations.
 - [rollouts/](rollouts/)

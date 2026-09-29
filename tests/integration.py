@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         assert query('node_processes_pids{job="node"}')
         [uname] = query('node_uname_info{job="node"}')
         assert uname['metric']['nodename'] == 'hetzner-one', uname
-        variables = {'$__rate_interval': '1m', '$job': 'node', '$node': uname['metric']['instance']}
+        variables = {'$__rate_interval': '1m', '$__range': '1h', '$job': 'node', '$node': uname['metric']['instance'], '$host': 'zibs.app|hooklook.app|art-gallery.dinubarbu.com'}
         def panels(items):
             for panel in items:
                 yield panel
@@ -173,6 +173,12 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
                     # $1 in label_replace is a capture group, not a variable.
                     assert not re.search(r'\$\{?[A-Za-z_]', expr), (uid, panel['title'], expr)
                     query(expr)
+        # Caddy dashboard series beyond the request histogram, after local 413/429 traffic.
+        for expr in ('caddy_http_request_errors_total{job="caddy",handler="subroute"}',
+                     'caddy_http_response_duration_seconds_bucket{job="caddy",handler="subroute"}',
+                     'caddy_http_requests_in_flight{job="caddy",handler="subroute"}',
+                     'process_start_time_seconds{job="caddy"}'):
+            wait(lambda expr=expr: query(expr))
         print('PASS: actual exporters, Grafana auth/provisioning/datasource, all dashboard PromQL expressions', flush=True)
         # Exercise file ownership/state persistence and service scoping on restart.
         api('/api/user/preferences', payload={'theme': 'dark'}, method='PUT')
