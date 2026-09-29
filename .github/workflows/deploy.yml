@@ -2,9 +2,9 @@ name: Deploy production
 
 # Pushes to main that change what the services run deploy every such change
 # since the last verified production deployment. Other pushes (scripts, docs,
-# tests, this workflow) start no run; they reach the VPS with the next
-# deployment, or with a manual run. Keep the paths in step with
-# scripts/classify-deploy.sh. See docs/deployment-runbook.md.
+# tests, the workflows) start no run; they reach the VPS with the next
+# deployment, or with a manual run. Pull requests run test.yml alone. Keep the
+# paths in step with scripts/classify-deploy.sh. See docs/deployment-runbook.md.
 on:
   push:
     branches: [main]
@@ -71,46 +71,15 @@ jobs:
           printf 'image=%s\n' "$image" >>"$GITHUB_OUTPUT"
           printf 'Image `%s`\n' "$image" >>"$GITHUB_STEP_SUMMARY"
 
+  # The same workflow pull requests run, against this run's image digest.
   test:
     needs: image
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Script syntax
-        run: |
-          for script in scripts/*.sh; do bash -n "$script"; done
-          python3 -m py_compile scripts/verify-observability.py tests/*.py
-      - name: Deployment script tests
-        run: |
-          python3 tests/ci_deploy.py
-          python3 tests/deployment.py
-      - name: Compose files render
-        run: |
-          docker compose config --quiet
-          GRAFANA_ADMIN_PASSWORD=ci docker compose -f compose.observability.yaml config --quiet
-      # The image the deployment will pull, under the local name the
-      # integration test uses. The same checks activate.sh runs on the VPS.
-      - name: Pull the Caddy image and validate the Caddyfile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE: ${{ needs.image.outputs.image }}
-        run: |
-          printf '%s\n' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker pull --quiet "$IMAGE"
-          docker logout ghcr.io
-          docker image tag "$IMAGE" caddy-hooklook:2.11.4-ratelimit
-          docker run --rm --network none "$IMAGE" caddy list-modules | grep -x 'http.handlers.rate_limit'
-          docker run --rm --network none -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" "$IMAGE" \
-            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-      - name: Ingress and observability integration test
-        run: |
-          go version
-          python3 tests/integration.py
+    uses: ./.github/workflows/test.yml
+    with:
+      image: ${{ needs.image.outputs.image }}
 
   plan:
     needs: test
