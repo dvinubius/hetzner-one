@@ -78,11 +78,19 @@ or `observability/`. Pushes that change only scripts, the workflow, tests, or
 docs start no run; that machinery reaches the VPS with the next deployment. To
 roll out such a change on its own, [run the workflow manually](#run-a-deployment-manually).
 
-1. **Test.** Script syntax, the deployment and CI script tests, Compose
-   rendering, a Caddy image build with its rate-limit module and Caddyfile
-   validation, and the local [integration test](observability-runbook.md#local-validation).
-   Nothing contacts the VPS before these pass.
-2. **Plan.** Runs serialized in the `production-deploy` concurrency group. It
+1. **Image.** The Dockerfile pins Caddy and the rate-limit module, so its Git
+   blob identifies the image:
+   `ghcr.io/dvinubius/hetzner-one-caddy:dockerfile-<blob>`. If that tag
+   already exists, the job reuses it; otherwise it builds for `linux/amd64`,
+   checks the rate-limit module, and pushes it. Every run without a Dockerfile
+   change therefore tests and deploys the same image without rebuilding it.
+   The job passes on its immutable `@sha256:…` reference. Only this job can
+   write packages. A pushed image whose tests then fail is never deployed.
+2. **Test.** Script syntax, the deployment and CI script tests, Compose
+   rendering, the rate-limit module and Caddyfile validation against the
+   image's digest, and the local [integration test](observability-runbook.md#local-validation)
+   with that image. Nothing contacts the VPS before these pass.
+3. **Plan.** Runs serialized in the `production-deploy` concurrency group. It
    reads `/opt/caddy/.deploy/manifest` over SSH and passes the last verified
    commit to [`classify-deploy.sh`](../scripts/classify-deploy.sh), which
    inspects every path changed since then, including pushes that started no
@@ -97,14 +105,6 @@ roll out such a change on its own, [run the workflow manually](#run-a-deployment
    | Anything else only | none |
 
    If SSH or Git inspection fails, the run stops without changing production.
-3. **Image** (caddy and full modes only). The Dockerfile pins Caddy and the
-   rate-limit module, so its Git blob identifies the image:
-   `ghcr.io/dvinubius/hetzner-one-caddy:dockerfile-<blob>`. If that tag
-   already exists, the job reuses it; otherwise it builds for `linux/amd64` and
-   pushes it. A Caddyfile or Compose change therefore redeploys the same image.
-   The job checks the rate-limit module and validates the Caddyfile against the
-   image, then passes on its immutable `@sha256:…` reference. Only this job can
-   write packages.
 4. **Deploy.** Confirms the commit is still the head of `main` (otherwise the
    run is stale and a newer run will deploy), checks the VPS prerequisites,
    creates a bundle with `git archive` from that exact commit (`Caddyfile`,
@@ -125,8 +125,8 @@ run is full.
 
 ## Run a deployment manually
 
-A manual run always deploys the head of `main` and goes through the same test,
-plan, image, and deploy jobs as a push. Use it for the first GitHub
+A manual run always deploys the head of `main` and goes through the same image,
+test, plan, and deploy jobs as a push. Use it for the first GitHub
 deployment, to roll out script or workflow changes that started no run, or to
 redeploy after a manual rollback or a workstation deployment. GitHub offers
 manual runs only once the workflow file is on `main`. From the repository:
