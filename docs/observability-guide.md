@@ -89,18 +89,18 @@ not per site and ignore it.
 | Panel | Question it answers | Normal looks like |
 | --- | --- | --- |
 | Summary stats | How has the selected period gone overall? | 5xx share green, middleware errors near zero outside Hooklook and gallery 404s |
-| Caddy scrape availability | Can Prometheus read Caddy at all? | Flat at 1 |
 | Requests by site | Who is receiving traffic, and how much? | Each site's usual daily rhythm |
 | Responses by status class | What is the mix of 2xx/3xx/4xx/5xx? | Mostly 2xx; some 3xx and 4xx |
 | 4xx and 5xx responses | Which exact error codes, on which site? | Occasional 404s; no sustained 5xx |
-| Middleware errors by site | Is Caddy itself failing requests? | Near zero, apart from gallery 404s and Hooklook 429s |
 | 502 and 504 responses | Is Caddy failing to reach an app? | Empty |
+| 413 and 429 responses (5m) | Are Hooklook's limits biting? | Empty or rare |
+| Middleware errors by site | Is Caddy itself failing requests? | Near zero, apart from gallery 404s and Hooklook 429s |
+| Reverse-proxy upstream state | What does Caddy believe about each upstream? | 1, but see scenario 1: this proves little |
 | p95 request duration | How long do whole requests take? | Low; Hooklook may sit at 10 s because of streams |
 | p95 time to first byte | How quickly do apps start answering? | Well under a second |
 | Data transfer rate | How many bytes go in and out, per site? | Gallery dominates outbound when people browse |
 | Requests in flight | What is open right now? | Near zero; Hooklook holds its open streams |
-| 413 and 429 responses (5m) | Are Hooklook's limits biting? | Empty or rare |
-| Reverse-proxy upstream state | What does Caddy believe about each upstream? | 1, but see scenario 1: this proves little |
+| Caddy scrape availability | Can Prometheus read Caddy at all? | Flat at 1 |
 | Distributions row (heatmaps) | What is the full shape behind the averages? | Stable bands |
 | Caddy process row | Is Caddy itself healthy as a process? | Flat memory, goroutines tracking load |
 

@@ -368,54 +368,6 @@
       }
     },
     {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Caddy scrape availability",
-      "description": "Scrape availability only; verify HTTPS separately.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "hetzner-prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 4,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "up{job=\"caddy\"}",
-          "legendFormat": "{{instance}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "showPoints": "never",
-            "fillOpacity": 10,
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
       "id": 8,
       "type": "timeseries",
       "title": "Requests by site",
@@ -425,7 +377,7 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 12,
+        "x": 0,
         "y": 4,
         "w": 12,
         "h": 8
@@ -473,8 +425,8 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 0,
-        "y": 12,
+        "x": 12,
+        "y": 4,
         "w": 12,
         "h": 8
       },
@@ -521,9 +473,9 @@
         "uid": "hetzner-prometheus"
       },
       "gridPos": {
-        "x": 12,
+        "x": 0,
         "y": 12,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "targets": [
@@ -536,6 +488,102 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "502 and 504 responses",
+      "description": "Traffic-based upstream failure indicator; use together with external health checks.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"502|504\"}[$__rate_interval]))",
+          "legendFormat": "{{host}} {{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "showPoints": "never",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "413 and 429 responses (5m)",
+      "description": "Validated locally with controlled Caddy rejections. Not zone-specific; upstreams can return these codes too. 431 parser rejections require a separate synthetic check.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hetzner-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(host,code)(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"413|429\"}[5m]))",
+          "legendFormat": "{{host}} {{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
           "color": {
             "mode": "palette-classic"
           },
@@ -608,10 +656,10 @@
       }
     },
     {
-      "id": 12,
+      "id": 18,
       "type": "timeseries",
-      "title": "502 and 504 responses",
-      "description": "Traffic-based upstream failure indicator; use together with external health checks.",
+      "title": "Reverse-proxy upstream state",
+      "description": "Caddy internal state; no active health checks are configured, so 1 is not proof the upstream is reachable.",
       "datasource": {
         "type": "prometheus",
         "uid": "hetzner-prometheus"
@@ -625,13 +673,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host,code)(rate(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"502|504\"}[$__rate_interval]))",
-          "legendFormat": "{{host}} {{code}}"
+          "expr": "caddy_reverse_proxy_upstreams_healthy{job=\"caddy\"}",
+          "legendFormat": "{{upstream}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "color": {
             "mode": "palette-classic"
           },
@@ -866,10 +914,10 @@
       }
     },
     {
-      "id": 17,
+      "id": 7,
       "type": "timeseries",
-      "title": "413 and 429 responses (5m)",
-      "description": "Validated locally with controlled Caddy rejections. Not zone-specific; upstreams can return these codes too. 431 parser rejections require a separate synthetic check.",
+      "title": "Caddy scrape availability",
+      "description": "Scrape availability only; verify HTTPS separately.",
       "datasource": {
         "type": "prometheus",
         "uid": "hetzner-prometheus"
@@ -877,62 +925,14 @@
       "gridPos": {
         "x": 0,
         "y": 44,
-        "w": 12,
-        "h": 8
+        "w": 24,
+        "h": 6
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host,code)(increase(caddy_http_request_duration_seconds_count{job=\"caddy\",handler=\"subroute\",host=~\"$host\",code=~\"413|429\"}[5m]))",
-          "legendFormat": "{{host}} {{code}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "showPoints": "never",
-            "fillOpacity": 10,
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 18,
-      "type": "timeseries",
-      "title": "Reverse-proxy upstream state",
-      "description": "Caddy internal state; no active health checks are configured, so 1 is not proof the upstream is reachable.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "hetzner-prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 44,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "caddy_reverse_proxy_upstreams_healthy{job=\"caddy\"}",
-          "legendFormat": "{{upstream}}"
+          "expr": "up{job=\"caddy\"}",
+          "legendFormat": "{{instance}}"
         }
       ],
       "fieldConfig": {
@@ -968,7 +968,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 50,
         "w": 24,
         "h": 1
       },
@@ -1032,7 +1032,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 53,
+            "y": 51,
             "w": 12,
             "h": 8
           }
@@ -1096,7 +1096,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 53,
+            "y": 51,
             "w": 12,
             "h": 8
           }
@@ -1160,7 +1160,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 61,
+            "y": 59,
             "w": 12,
             "h": 8
           }
@@ -1224,7 +1224,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 61,
+            "y": 59,
             "w": 12,
             "h": 8
           }
@@ -1238,7 +1238,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 51,
         "w": 24,
         "h": 1
       },
@@ -1286,7 +1286,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 54,
+            "y": 52,
             "w": 12,
             "h": 8
           }
@@ -1339,7 +1339,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 54,
+            "y": 52,
             "w": 12,
             "h": 8
           }
@@ -1392,7 +1392,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 62,
+            "y": 60,
             "w": 12,
             "h": 8
           }
@@ -1440,7 +1440,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 62,
+            "y": 60,
             "w": 12,
             "h": 8
           }
