@@ -1,0 +1,69 @@
+name: Test
+
+# Runs for pull requests into main, where branch protection requires the `test`
+# check, and inside the production deployment against the image that deployment
+# pulls. A pull request publishes nothing: it reuses the published image the
+# Dockerfile names, or builds that image locally when the Dockerfile changed.
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+    inputs:
+      image:
+        description: Published Caddy image digest to test (ghcr.io/…@sha256:…)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Script syntax
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+          python3 -m py_compile scripts/verify-observability.py tests/*.py
+      - name: Deployment script tests
+        run: |
+          python3 tests/ci_deploy.py
+          python3 tests/deployment.py
+      - name: Compose files render
+        run: |
+          docker compose config --quiet
+          GRAFANA_ADMIN_PASSWORD=ci docker compose -f compose.observability.yaml config --quiet
+      # The image under the local name the integration test uses, then the same
+      # checks activate.sh runs on the VPS.
+      - name: Provide the Caddy image and validate the Caddyfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          if [[ -n $IMAGE ]]; then
+            printf '%s\n' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+            docker pull --quiet "$IMAGE"
+            docker logout ghcr.io
+          else
+            IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hetzner-one-caddy:dockerfile-$(git rev-parse HEAD:Dockerfile)"
+            if docker pull --quiet "$IMAGE" 2>/dev/null; then
+              printf 'Reusing `%s`\n' "$IMAGE" >>"$GITHUB_STEP_SUMMARY"
+            else
+              docker build --platform linux/amd64 --tag "$IMAGE" .
+              printf 'Built `%s` locally; not published\n' "$IMAGE" >>"$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          docker image tag "$IMAGE" caddy-hooklook:2.11.4-ratelimit
+          docker run --rm --network none "$IMAGE" caddy list-modules | grep -x 'http.handlers.rate_limit'
+          docker run --rm --network none -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" "$IMAGE" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Ingress and observability integration test
+        run: |
+          go version
+          python3 tests/integration.py

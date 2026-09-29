@@ -5,7 +5,9 @@ service, hostname routes, public ports, and its `hooklook-edge` and `zibs-edge` 
 
 Before deployment or rollback, read [docs/deployment-runbook.md](docs/deployment-runbook.md).
 Pushes to `main` that change deployed files run `.github/workflows/deploy.yml`,
-which publishes the Caddy image to GHCR; the VPS never builds it. Keep the
+which publishes the Caddy image to GHCR; the VPS never builds it. Its tests
+live in `.github/workflows/test.yml`, which also runs for pull requests into
+`main` and never publishes. Keep the
 workflow's push `paths`, `scripts/classify-deploy.sh`, and the bundle in
 `scripts/ci-deploy.sh` in step (`tests/ci_deploy.py` checks the first two).
 

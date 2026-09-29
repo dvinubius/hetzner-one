@@ -8,11 +8,15 @@ it traffic can. The rate-limit handler is not part of standard Caddy, so the
 program is the custom build the [Dockerfile](../Dockerfile) compiles, which
 exists only as an image. The tests therefore need that image.
 
-The `test` job in [deploy.yml](../.github/workflows/deploy.yml) runs against
-the exact digest the deployment pulls. The `image` job before it reuses the
-published `dockerfile-<blob>` image, or builds and pushes it when the
-Dockerfile changed (see the [deployment runbook](deployment-runbook.md#how-a-push-deploys)).
-Nothing contacts the VPS before these tests pass. To run them locally, see
+All of it runs in [test.yml](../.github/workflows/test.yml), for every pull
+request into `main` and inside [deploy.yml](../.github/workflows/deploy.yml).
+In a deployment it runs against the exact digest the deployment pulls: the
+`image` job before it reuses the published `dockerfile-<blob>` image, or builds
+and pushes it when the Dockerfile changed (see the
+[deployment runbook](deployment-runbook.md#how-a-push-deploys)). A pull request
+publishes nothing: it pulls the same `dockerfile-<blob>` image when it exists,
+and otherwise builds it locally for the run. Nothing contacts the VPS before
+these tests pass. To run them locally, see
 [Local validation](observability-runbook.md#local-validation).
 
 | Layer | What it covers | Needs Docker |

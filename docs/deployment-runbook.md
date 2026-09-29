@@ -74,7 +74,7 @@ also reach that listener. The admin API stays on container loopback.
 
 The workflow starts only for pushes to `main` that change what the services
 run: `Caddyfile`, `Dockerfile`, `compose.yaml`, `compose.observability.yaml`,
-or `observability/`. Pushes that change only scripts, the workflow, tests, or
+or `observability/`. Pushes that change only scripts, the workflows, tests, or
 docs start no run; that machinery reaches the VPS with the next deployment. To
 roll out such a change on its own, [run the workflow manually](#run-a-deployment-manually).
 
@@ -89,7 +89,7 @@ flowchart LR
     i3 --> i6["Output the<br/>@sha256 digest"]
     i5 --> i6
   end
-  subgraph test["2 · Test: no VPS contact"]
+  subgraph test["2 · Test: test.yml, no VPS contact"]
     direction TB
     t1["Script syntax"] --> t2["CI and deployment script<br/>tests, fake SSH and Docker"]
     t2 --> t3["Render both<br/>Compose files"]
@@ -129,7 +129,8 @@ is written only after every phase passed.
    change therefore tests and deploys the same image without rebuilding it.
    The job passes on its immutable `@sha256:…` reference. Only this job can
    write packages. A pushed image whose tests then fail is never deployed.
-2. **Test.** Script syntax, the deployment and CI script tests, Compose
+2. **Test.** The [`Test`](../.github/workflows/test.yml) workflow that pull
+   requests run: script syntax, the deployment and CI script tests, Compose
    rendering, the rate-limit module and Caddyfile validation against the
    image's digest, and the local [integration test](observability-runbook.md#local-validation)
    with that image. Nothing contacts the VPS before these pass.
@@ -247,14 +248,18 @@ gh variable set DEPLOY_USER --env production --body caddy-deploy
 gh variable set DEPLOY_KNOWN_HOSTS --env production --body "<known_hosts line>"
 ```
 
-Protect `main` against force pushes and deletion. A rewritten `main` leaves
-the manifest's commit off the branch's history, which the classifier treats as
-a full deployment. Do not require the `test` check: the workflow runs only for
-deployment paths, so most commits would never report it.
+Protect `main` against force pushes and deletion, and require the `test` job.
+The [`Test`](../.github/workflows/test.yml) workflow reports that check on every
+pull request into `main`, whatever it changes; `Deploy production` reuses the
+same workflow after its image job. A rewritten `main` leaves the manifest's
+commit off the branch's history, which the classifier treats as a full
+deployment. Direct pushes by the repository admin bypass the required check
+(GitHub reports the bypass); the workflow still deploys nothing unless `test`
+passes.
 
 ```bash
 gh api -X PUT repos/dvinubius/hetzner-one/branches/main/protection --input - <<'JSON'
-{"required_status_checks":null,"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}
+{"required_status_checks":{"strict":false,"contexts":["test"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}
 JSON
 ```
 

@@ -68,7 +68,9 @@ may affect future project-managed resources.
 Pushes to `main` that change `Caddyfile`, `Dockerfile`, `compose.yaml`,
 `compose.observability.yaml`, or `observability/` deploy through the
 [`Deploy production`](.github/workflows/deploy.yml) GitHub Actions workflow.
-Other pushes start no run. The workflow tests the change, compares it with the
+Other pushes start no run. Pull requests into `main` run the same tests
+through [`test.yml`](.github/workflows/test.yml), which branch protection
+requires. The deploy workflow tests the change, compares it with the
 last verified deployment recorded on the VPS, and runs only the affected mode:
 `caddy`, `observability`, or `full`. Caddy deployments use an image published
 to GHCR, rebuilt only when the Dockerfile changes.

@@ -340,8 +340,9 @@ python3 tests/deployment.py
 python3 tests/ci_deploy.py
 ```
 
-The GitHub workflow's `test` job runs the same three tests before any deployment,
-with the published GHCR image in place of the local build.
+The GitHub `test` workflow runs the same three tests on every pull request into
+`main` and before any deployment, with the published GHCR image in place of the
+local build; a pull request that changes the Dockerfile builds it instead.
 
 The integration test uses isolated local Docker resources, a mock upstream, and
 random loopback ports. It checks rejection boundaries, private/public routing,
