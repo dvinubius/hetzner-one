@@ -51,9 +51,14 @@ what a local run cannot provide:
 - the admin API is disabled;
 - the TLS app and automatic HTTPS are removed, and `:443` becomes plain HTTP
   on `:8080`;
-- every upstream dial (`hooklook:8080`, `zibs:8080`, `grafana:3000`) points at
+- every upstream dial (`hooklook:8080`, `hooklook-grafana:3000`, `zibs:8080`,
+  `zibs-grafana-1:3000`) points at
   [`tests/upstream.go`](../tests/upstream.go), a fixture that consumes the
   request body and answers `ok`.
+
+Before that replacement, the test asserts each host's exact upstream set. No
+route may dial the bare `grafana` name, which both applications' Grafana
+containers carry on their edge networks.
 
 The binary, routes, limits and metrics settings are the production ones.
 
@@ -70,6 +75,7 @@ Requests use `Host: hooklook.app` unless noted.
 | `/health` with a 40 KB header | 431 | `max_header_size 32KiB`; Go's parser allows about 4 KiB more, so the real boundary is about 36 KiB. |
 | `zibs.app/login` | 404 | Private Grafana routes are answered by Caddy and reach no upstream. |
 | `zibs.app/public-dashboards/test` | 200 | The public shared-dashboard route is proxied. |
+| `/public-dashboards/test` | 200 | Hooklook's public shared-dashboard route is proxied, outside every rate-limit zone. |
 
 ### Metrics listener
 

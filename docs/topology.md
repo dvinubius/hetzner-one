@@ -25,16 +25,18 @@ flowchart TD
 
     subgraph zibsEdge["zibs-edge · bridge · owned here, Zibs joins"]
         zibs["Zibs app · zibs:8080"]
-        dashboard["Zibs Grafana · grafana:3000"]
+        dashboard["Zibs Grafana · zibs-grafana-1:3000"]
     end
 
     subgraph hooklookEdge["hooklook-edge · bridge · owned here, Hooklook joins"]
         hooklook["Hooklook app · hooklook:8080"]
+        hooklookDashboard["Hooklook Grafana · hooklook-grafana:3000"]
     end
 
     caddy -->|"zibs.app"| zibs
     caddy -->|"zibs.app · public-dashboard allowlist"| dashboard
     caddy -->|"hooklook.app"| hooklook
+    caddy -->|"hooklook.app · public-dashboard allowlist"| hooklookDashboard
 ```
 
 | Port | Listener | Bound to | Reachable from | Purpose |
@@ -46,10 +48,20 @@ flowchart TD
 | 8080/tcp | Zibs app (Zibs-owned) | `zibs-edge` | Containers on `zibs-edge` | `zibs.app` upstream |
 | 3000/tcp | Zibs Grafana (Zibs-owned) | `zibs-edge` | Containers on `zibs-edge` | Public-dashboard allowlist upstream |
 | 8080/tcp | Hooklook app (Hooklook-owned) | `hooklook-edge` | Containers on `hooklook-edge` | `hooklook.app` upstream |
+| 3000/tcp | Hooklook Grafana (Hooklook-owned) | `hooklook-edge` | Containers on `hooklook-edge` | Public-dashboard allowlist upstream |
 
-The Zibs dashboard appears only as a reverse-proxy destination. Its server and
-configuration belong to Zibs. Caddy exposes only the public-dashboard path
-allowlist; private workspace and probe paths return 404.
+Each dashboard appears only as a reverse-proxy destination. Its server and
+configuration belong to its application. On both hosts Caddy exposes only the
+public-dashboard path allowlist (`/public-dashboards/*`,
+`/api/public/dashboards/*`, `/public/build/*`, `/public/img/*`,
+`/favicon.ico`). On `zibs.app`, private workspace and probe paths return 404;
+on `hooklook.app` they reach Hooklook, which does not serve them.
+
+Both Grafana containers are Compose services named `grafana`, and Compose adds
+the service name as an alias on every network a container joins. Because Caddy
+joins both edge networks, a bare `grafana` upstream could resolve to either
+one. Caddy therefore dials `zibs-grafana-1`, the Zibs container name, and
+`hooklook-grafana`, an alias Hooklook's Compose file sets on `hooklook-edge`.
 
 Caddy serves the gallery directly from `/opt/art-gallery/public`, mounted at
 `/srv/art-gallery`. Its persistent volumes are `caddy_caddy-data` and

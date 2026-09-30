@@ -23,10 +23,13 @@ The project owns both shared edge networks and reuses the existing certificate v
   Compose command can remove them.
 - `zibs-edge` is created and owned by this project.
   [zibs](https://github.com/dvinubius/zibs) joins it externally;
-  Caddy reaches `zibs` and `grafana` by their Docker service names.
+  Caddy reaches the app as `zibs` and its Grafana as `zibs-grafana-1`, the
+  Compose container name. The bare service name `grafana` is ambiguous once
+  Hooklook's Grafana also joins `hooklook-edge`.
 - `hooklook-edge` is created and owned by this project.
   [Hooklook](https://github.com/dvinubius/hooklook) joins it as an external
-  network so Caddy can reach `hooklook:8080`. Network membership
+  network so Caddy can reach `hooklook:8080`, and its Grafana under the alias
+  `hooklook-grafana` for the public-dashboard allowlist. Network membership
   permits peer connectivity; it is not a per-port firewall.
 - `/opt/art-gallery/public` is mounted read-only at `/srv/art-gallery`.
 

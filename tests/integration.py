@@ -69,6 +69,26 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
             server.pop('tls_connection_policies', None)
             server['automatic_https'] = {'disable': True}
 
+    def upstreams(item, found):
+        if isinstance(item, dict):
+            if 'dial' in item:
+                found.add(item['dial'])
+            for value in item.values():
+                upstreams(value, found)
+        elif isinstance(item, list):
+            for value in item:
+                upstreams(value, found)
+        return found
+    # Caddy joins both edge networks, where each app's Grafana also answers to
+    # the Compose service name "grafana"; every upstream must be unambiguous.
+    dials = {}
+    for server in adapted['apps']['http']['servers'].values():
+        for route in server.get('routes', []):
+            for host in (host for match in route.get('match', []) for host in match.get('host', [])):
+                dials[host] = upstreams(route, set())
+    assert dials['zibs.app'] == {'zibs:8080', 'zibs-grafana-1:3000'}, dials
+    assert dials['hooklook.app'] == {'hooklook:8080', 'hooklook-grafana:3000'}, dials
+
     def replace_upstreams(item):
         if isinstance(item, dict):
             if 'dial' in item:
@@ -119,6 +139,7 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         assert request('/health', headers={'X-Large': 'x' * 40000}) == 431
         assert request('/login', headers={'Host': 'zibs.app'}) == 404
         assert request('/public-dashboards/test', headers={'Host': 'zibs.app'}) == 200
+        assert request('/public-dashboards/test') == 200
         metrics = urllib.request.urlopen(metrics_url + '/metrics').read().decode()
         lines = [line for line in metrics.splitlines() if line.startswith('caddy_http_request_duration_seconds_count') and 'host="hooklook.app"' in line]
         assert sum(float(line.rsplit(' ', 1)[1]) for line in lines if 'code="413"' in line) == 1

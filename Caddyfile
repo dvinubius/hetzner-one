@@ -19,9 +19,12 @@ zibs.app {
 	# Grafana externally shared dashboards use this page, its deliberately
 	# anonymous dashboard API, and these public static assets. Do not proxy the
 	# broader Grafana UI or its general /api surface.
+	# Caddy joins both edge networks, and Compose gives each app's Grafana the
+	# alias "grafana" on its edge network, so a bare "grafana" upstream is
+	# ambiguous. Dial the Zibs container by its Compose container name.
 	@public_grafana path /public-dashboards/* /api/public/dashboards/* /public/build/* /public/img/* /favicon.ico
 	handle @public_grafana {
-		reverse_proxy grafana:3000
+		reverse_proxy zibs-grafana-1:3000
 	}
 
 	# Do not let Grafana workspace routes fall through to the public app. They
@@ -84,6 +87,15 @@ hooklook.app {
 				events 20
 				window 20s
 			}
+		}
+
+		# Hooklook's externally shared Grafana dashboard: the same narrow
+		# allowlist as zibs.app. None of these paths is a Hooklook route, and no
+		# rate-limit zone above matches them. Hooklook's Compose file gives its
+		# Grafana the unique alias hooklook-grafana on hooklook-edge.
+		@hooklook_public_grafana path /public-dashboards/* /api/public/dashboards/* /public/build/* /public/img/* /favicon.ico
+		handle @hooklook_public_grafana {
+			reverse_proxy hooklook-grafana:3000
 		}
 
 		# Restrict bodies only on public capture URLs. Inspector pages, APIs, and
