@@ -23,6 +23,7 @@ services:
     networks:
       - zibs-edge
       - hooklook-edge
+      - saga-lab-edge
       - platform-metrics
 
 volumes:
@@ -41,6 +42,9 @@ networks:
   # external consumer, so it cannot accidentally create an isolated network.
   hooklook-edge:
     name: hooklook-edge
+  # Saga Lab joins externally, with its app and Grafana under unique aliases.
+  saga-lab-edge:
+    name: saga-lab-edge
   # Also declared by compose.observability.yaml under the same project/key.
   platform-metrics:
     internal: true

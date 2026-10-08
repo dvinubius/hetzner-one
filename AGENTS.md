@@ -1,7 +1,8 @@
 # Hetzner-One
 
 Shared Caddy ingress on one VPS. This repository owns Caddy's image, Compose
-service, hostname routes, public ports, and its `hooklook-edge` and `zibs-edge` networks.
+service, hostname routes, public ports, and its `hooklook-edge`, `zibs-edge` and
+`saga-lab-edge` networks.
 
 Before deployment or rollback, read [docs/deployment-runbook.md](docs/deployment-runbook.md).
 Pushes to `main` that change deployed files run `.github/workflows/deploy.yml`,
@@ -13,7 +14,7 @@ workflow's push `paths`, `scripts/classify-deploy.sh`, and the bundle in
 
 Keep routes, deployment scripts, the workflow, and the runbook consistent.
 
-Preserve the external certificate volumes and both shared edge networks.
+Preserve the external certificate volumes and the shared edge networks.
 Never use `docker compose down -v`.
 
 Platform monitoring lives in `compose.observability.yaml` under the same `caddy`

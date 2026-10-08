@@ -1,22 +1,23 @@
 # Hetzner-One topology
 
 Hetzner-One owns shared Caddy ingress, its public ports, certificate storage,
-the `zibs-edge` and `hooklook-edge` Docker networks, and its platform monitoring. Upstream services run
+the `zibs-edge`, `hooklook-edge` and `saga-lab-edge` Docker networks, and its platform monitoring. Upstream services run
 on the same VPS and are deployed by their respective projects,
-[zibs](https://github.com/dvinubius/zibs) and
-[Hooklook](https://github.com/dvinubius/hooklook).
+[zibs](https://github.com/dvinubius/zibs),
+[Hooklook](https://github.com/dvinubius/hooklook) and
+[Saga Lab](https://github.com/dvinubius/saga-lab).
 Application observability remains outside this repository.
 
 ## Ingress
 
-Boxes are Docker networks. Caddy spans both edge networks, so it sits outside
+Boxes are Docker networks. Caddy spans every edge network, so it sits outside
 them; each upstream is reachable from Caddy only over the network it shares.
 
 ```mermaid
 flowchart TD
     public["Public clients"] -->|"published ports · TCP 80/443 · UDP 443"| caddy
 
-    caddy["Caddy · TLS and routing<br/>joins zibs-edge, hooklook-edge"]
+    caddy["Caddy · TLS and routing<br/>joins zibs-edge, hooklook-edge, saga-lab-edge"]
     certificates[("caddy_caddy-data<br/>caddy_caddy-config")]
     gallery("/opt/art-gallery/public · read-only bind mount")
     
@@ -33,35 +34,49 @@ flowchart TD
         hooklookDashboard["Hooklook Grafana · hooklook-grafana:3000"]
     end
 
+    subgraph sagaEdge["saga-lab-edge · bridge · owned here, Saga Lab joins"]
+        saga["Saga Lab Transfer Service · saga-lab:8080"]
+        sagaDashboard["Saga Lab Grafana · saga-lab-grafana:3000"]
+    end
+
     caddy -->|"zibs.app"| zibs
     caddy -->|"zibs.app · public-dashboard allowlist"| dashboard
     caddy -->|"hooklook.app"| hooklook
     caddy -->|"hooklook.app · public-dashboard allowlist"| hooklookDashboard
+    caddy -->|"saga.dinubarbu.com"| saga
+    caddy -->|"saga.dinubarbu.com/grafana/* · whole UI"| sagaDashboard
 ```
 
 | Port | Listener | Bound to | Reachable from | Purpose |
 | --- | --- | --- | --- | --- |
 | 80/tcp | Caddy | Host, all interfaces | Public | HTTP-to-HTTPS redirects and ACME HTTP-01 |
-| 443/tcp | Caddy | Host, all interfaces | Public | HTTPS for all three hostnames |
+| 443/tcp | Caddy | Host, all interfaces | Public | HTTPS for all four hostnames |
 | 443/udp | Caddy | Host, all interfaces | Public | HTTP/3 |
 | 2019/tcp | Caddy admin API | Container loopback | Inside the Caddy container only | Configuration API; never published or routed |
 | 8080/tcp | Zibs app (Zibs-owned) | `zibs-edge` | Containers on `zibs-edge` | `zibs.app` upstream |
 | 3000/tcp | Zibs Grafana (Zibs-owned) | `zibs-edge` | Containers on `zibs-edge` | Public-dashboard allowlist upstream |
 | 8080/tcp | Hooklook app (Hooklook-owned) | `hooklook-edge` | Containers on `hooklook-edge` | `hooklook.app` upstream |
 | 3000/tcp | Hooklook Grafana (Hooklook-owned) | `hooklook-edge` | Containers on `hooklook-edge` | Public-dashboard allowlist upstream |
+| 8080/tcp | Saga Lab Transfer Service (Saga Lab-owned) | `saga-lab-edge` | Containers on `saga-lab-edge` | `saga.dinubarbu.com` upstream |
+| 3000/tcp | Saga Lab Grafana (Saga Lab-owned) | `saga-lab-edge` | Containers on `saga-lab-edge` | `saga.dinubarbu.com/grafana/*` upstream |
 
 Each dashboard appears only as a reverse-proxy destination. Its server and
-configuration belong to its application. On both hosts Caddy exposes only the
-public-dashboard path allowlist (`/public-dashboards/*`,
+configuration belong to its application. On `zibs.app` and `hooklook.app`
+Caddy exposes only the public-dashboard path allowlist (`/public-dashboards/*`,
 `/api/public/dashboards/*`, `/public/build/*`, `/public/img/*`,
 `/favicon.ico`). On `zibs.app`, private workspace and probe paths return 404;
-on `hooklook.app` they reach Hooklook, which does not serve them.
+on `hooklook.app` they reach Hooklook, which does not serve them. On
+`saga.dinubarbu.com` Caddy proxies Saga Lab's whole Grafana UI under
+`/grafana/*`, because its Trace links pass a `traceId` variable that an
+externally shared dashboard cannot take; see the
+[README](../README.md#saga-lab-ingress-policy).
 
-Both Grafana containers are Compose services named `grafana`, and Compose adds
+The Grafana containers are Compose services named `grafana`, and Compose adds
 the service name as an alias on every network a container joins. Because Caddy
-joins both edge networks, a bare `grafana` upstream could resolve to either
-one. Caddy therefore dials `zibs-grafana-1`, the Zibs container name, and
-`hooklook-grafana`, an alias Hooklook's Compose file sets on `hooklook-edge`.
+joins every edge network, a bare `grafana` upstream could resolve to any of
+them. Caddy therefore dials `zibs-grafana-1`, the Zibs container name, and
+`hooklook-grafana` and `saga-lab-grafana`, aliases that Hooklook's and Saga
+Lab's Compose files set on their edge networks.
 
 Caddy serves the gallery directly from `/opt/art-gallery/public`, mounted at
 `/srv/art-gallery`. Its persistent volumes are `caddy_caddy-data` and
@@ -117,7 +132,7 @@ flowchart TD
 | 3000/tcp | Platform Grafana | `host-observability`, `grafana-access` | Monitoring containers | Grafana UI and API behind the loopback publication |
 | 9090/tcp | Platform Prometheus | `host-observability`, `platform-metrics` | Monitoring containers and Caddy | Grafana datasource; not published |
 | 9100/tcp | Platform node_exporter | `host-observability` | Monitoring containers | Host metrics scrape; not published |
-| 9180/tcp | Caddy metrics listener | `platform-metrics`, `zibs-edge`, `hooklook-edge` | Prometheus and trusted edge-network containers | Caddy metrics scrape; not published, not an admin API |
+| 9180/tcp | Caddy metrics listener | `platform-metrics`, `zibs-edge`, `hooklook-edge`, `saga-lab-edge` | Prometheus and trusted edge-network containers | Caddy metrics scrape; not published, not an admin API |
 
 `host-observability` and `platform-metrics` are internal networks without
 outbound access. `grafana-access` is a non-internal bridge that exists only so

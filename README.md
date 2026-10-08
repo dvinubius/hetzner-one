@@ -2,13 +2,13 @@
 
 Shared Caddy ingress for the VPS. This Compose project is the sole owner of
 public TCP 80/443 and UDP 443, TLS certificate state, hostname routing, and
-the gallery bind mount. It serves `zibs.app`, `art-gallery.dinubarbu.com`, and
-`hooklook.app`.
+the gallery bind mount. It serves `zibs.app`, `art-gallery.dinubarbu.com`,
+`hooklook.app`, and `saga.dinubarbu.com`.
 
 Hostnames are explicit in [`Caddyfile`](Caddyfile). There is no
 `CADDY_DOMAIN` environment variable to configure.
 
-Zibs and Hooklook each own their Grafana server, dashboard configuration, and
+Zibs, Hooklook, and Saga Lab each own their Grafana server, dashboard configuration, and
 collectors. The platform stack adds its own Grafana, Prometheus, and
 node_exporter for host and Caddy metrics; operate it with the
 [observability runbook](docs/observability-runbook.md).
@@ -16,7 +16,7 @@ The current Compose project remains named `caddy` to retain existing resources.
 
 ## Dependencies
 
-The project owns both shared edge networks and reuses the existing certificate volumes:
+The project owns the shared edge networks and reuses the existing certificate volumes:
 
 - `caddy_caddy-data` and `caddy_caddy-config` retain Caddy's ACME certificates
   and runtime configuration. They are external, created outside Compose, so no
@@ -31,6 +31,10 @@ The project owns both shared edge networks and reuses the existing certificate v
   network so Caddy can reach `hooklook:8080`, and its Grafana under the alias
   `hooklook-grafana` for the public-dashboard allowlist. Network membership
   permits peer connectivity; it is not a per-port firewall.
+- `saga-lab-edge` is created and owned by this project.
+  [Saga Lab](https://github.com/dvinubius/saga-lab) joins it as an external
+  network with its Transfer Service under the alias `saga-lab` and its Grafana
+  under `saga-lab-grafana`; nothing else of Saga Lab joins it.
 - `/opt/art-gallery/public` is mounted read-only at `/srv/art-gallery`.
 
 ## Hooklook ingress policy
@@ -61,6 +65,31 @@ Caddy is directly internet-facing, so these limits deliberately key on its
 socket peer (`{remote_host}`) and do not trust client-supplied forwarding
 headers.
 The 10 MB policy is deployed in the current Caddy configuration.
+
+## Saga Lab ingress policy
+
+`saga.dinubarbu.com` proxies `/grafana/*` to `saga-lab-grafana:3000` with the
+prefix kept, since Saga Lab's Grafana serves from that sub-path, and passes
+WebSocket upgrades for Grafana Live. Everything else goes to `saga-lab:8080`.
+Its DNS points at the VPS without Cloudflare proxying, and Caddy obtains its
+certificate.
+
+Unlike `zibs.app` and `hooklook.app`, which expose only the narrow
+externally shared dashboard allowlist, Saga Lab's whole Grafana UI is
+proxied. Each transfer page links to a Trace dashboard with its `traceId`
+as a dashboard variable, and an externally shared dashboard cannot take
+variables. Saga Lab's Grafana therefore grants anonymous visitors the Viewer
+role; its own configuration, not Caddy, keeps them read-only.
+
+Both limits key on the direct socket peer (`{remote_host}`) with metrics
+disabled, like Hooklook's:
+
+- `POST` to `/transfers`, `/top-ups`, `/reset`, or `/api/*`: 20 per minute per
+  client address, one budget across all of them. Page and API reads are not
+  limited.
+- Any request under `/grafana/*`: 300 per minute per client address.
+
+Until Saga Lab is deployed and joins `saga-lab-edge`, the site answers `502`.
 
 Ensure those resources exist before starting this project. Do not run `docker
 compose down -v`: the volumes are external, but the command is unnecessary and
