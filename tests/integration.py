@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 import os
 import re
+import socket
 from pathlib import Path
 import subprocess
 import tempfile
@@ -44,6 +45,11 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
     work = Path(tmp)
     password = uuid.uuid4().hex
     env = {**os.environ, 'GRAFANA_ADMIN_PASSWORD': password}
+    # Applications join these networks externally by name; Caddy owns them.
+    ingress = json.loads(output('docker', 'compose', '-f', str(ROOT / 'compose.yaml'), 'config', '--format', 'json'))
+    for network in ('zibs-edge', 'hooklook-edge', 'saga-lab-edge'):
+        assert ingress['networks'][network]['name'] == network and not ingress['networks'][network].get('external'), network
+        assert network in ingress['services']['caddy']['networks'], network
     config = json.loads(output('docker', 'compose', '-f', str(ROOT / 'compose.observability.yaml'), 'config', '--format', 'json', env=env))
     config['name'] = PROJECT
     for section in ('volumes', 'networks'):
@@ -79,7 +85,7 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
             for value in item:
                 upstreams(value, found)
         return found
-    # Caddy joins both edge networks, where each app's Grafana also answers to
+    # Caddy joins every edge network, where each app's Grafana also answers to
     # the Compose service name "grafana"; every upstream must be unambiguous.
     dials = {}
     for server in adapted['apps']['http']['servers'].values():
@@ -88,11 +94,13 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
                 dials[host] = upstreams(route, set())
     assert dials['zibs.app'] == {'zibs:8080', 'zibs-grafana-1:3000'}, dials
     assert dials['hooklook.app'] == {'hooklook:8080', 'hooklook-grafana:3000'}, dials
+    assert dials['saga.dinubarbu.com'] == {'saga-lab:8080', 'saga-lab-grafana:3000'}, dials
 
     def replace_upstreams(item):
         if isinstance(item, dict):
             if 'dial' in item:
-                item['dial'] = 'fixture:8080'
+                # The fixture answers on both upstream ports, naming the port.
+                item['dial'] = 'fixture:' + item['dial'].rsplit(':', 1)[1]
             for value in item.values():
                 replace_upstreams(value)
         elif isinstance(item, list):
@@ -125,13 +133,30 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
             request = urllib.request.Request(grafana + path, headers=headers,
                 data=json.dumps(payload).encode() if payload is not None else None, method=method)
             return json.load(urllib.request.urlopen(request, timeout=10))
-        def request(path, data=None, headers=None):
-            req = urllib.request.Request(base + path, data=data, headers={'Host': 'hooklook.app', **(headers or {})})
+        def fetch(path, data=None, headers=None, method=None):
+            req = urllib.request.Request(base + path, data=data, headers={'Host': 'hooklook.app', **(headers or {})}, method=method)
             try:
                 with urllib.request.urlopen(req, timeout=10) as response:
-                    return response.status
+                    return response.status, response.read().decode()
             except urllib.error.HTTPError as error:
-                return error.code
+                return error.code, ''
+        def request(path, data=None, headers=None, method=None):
+            return fetch(path, data, headers, method)[0]
+        saga = {'Host': 'saga.dinubarbu.com'}
+        def websocket_echo(path):
+            with socket.create_connection(('127.0.0.1', int(base.rsplit(':', 1)[1])), timeout=10) as conn:
+                conn.sendall((f'GET {path} HTTP/1.1\r\nHost: saga.dinubarbu.com\r\nConnection: Upgrade\r\n'
+                              'Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n'
+                              'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n').encode())
+                reply = b''
+                while b'\r\n\r\n' not in reply:
+                    reply += conn.recv(4096)
+                assert reply.startswith(b'HTTP/1.1 101 '), reply
+                conn.sendall(b'ping')
+                echoed = b''
+                while len(echoed) < 4:
+                    echoed += conn.recv(4)
+                return echoed.decode()
         wait(lambda: request('/health') == 200)
         assert request('/b/test', b'x' * 10000000) == 200
         assert request('/b/test', b'x' * 10000001) == 413
@@ -153,6 +178,18 @@ with tempfile.TemporaryDirectory(prefix='hetzner-integration-') as tmp:
         except urllib.error.HTTPError as error:
             assert error.code == 404
         print('PASS: ingress boundaries, public dashboard route, metrics labels and rejection counters', flush=True)
+        assert fetch('/', headers=saga) == (200, '8080 /')
+        assert fetch('/transfers/abc', headers=saga) == (200, '8080 /transfers/abc')
+        assert fetch('/grafana/d/saga-lab-trace', headers=saga) == (200, '3000 /grafana/d/saga-lab-trace')
+        assert websocket_echo('/grafana/api/live/ws') == 'ping'
+        print('PASS: saga.dinubarbu.com routes /grafana/* with its prefix to Grafana, passing WebSocket upgrades, the rest to the app', flush=True)
+        submissions = ['/transfers', '/top-ups', '/reset', '/api/transfers'] * 5 + ['/api/top-ups']
+        assert [request(path, b'', saga) for path in submissions] == [200] * 20 + [429]
+        assert request('/api/transfers', headers=saga) == 200
+        # The two Grafana requests above are the zone's first.
+        assert [request('/grafana/api/health', headers=saga) for _ in range(299)] == [200] * 298 + [429]
+        assert request('/', headers=saga) == 200
+        print('PASS: saga.dinubarbu.com limits submissions to 20 POSTs and Grafana to 300 requests a minute', flush=True)
         wait(lambda: api('/api/health', False).get('database') == 'ok')
         wait(lambda: api('/api/datasources/uid/hetzner-prometheus/health').get('status') == 'OK')
         try:

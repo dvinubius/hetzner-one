@@ -52,13 +52,16 @@ what a local run cannot provide:
 - the TLS app and automatic HTTPS are removed, and `:443` becomes plain HTTP
   on `:8080`;
 - every upstream dial (`hooklook:8080`, `hooklook-grafana:3000`, `zibs:8080`,
-  `zibs-grafana-1:3000`) points at
-  [`tests/upstream.go`](../tests/upstream.go), a fixture that consumes the
-  request body and answers `ok`.
+  `zibs-grafana-1:3000`, `saga-lab:8080`, `saga-lab-grafana:3000`) points at
+  the same port of [`tests/upstream.go`](../tests/upstream.go), a fixture
+  that consumes the request body and answers with its port and the request
+  path, or echoes the connection after a WebSocket upgrade.
 
 Before that replacement, the test asserts each host's exact upstream set. No
-route may dial the bare `grafana` name, which both applications' Grafana
-containers carry on their edge networks.
+route may dial the bare `grafana` name, which every application's Grafana
+container carries on its edge network. The test also checks that
+`compose.yaml` owns each edge network under its fixed name and attaches Caddy
+to it.
 
 The binary, routes, limits and metrics settings are the production ones.
 
@@ -76,6 +79,11 @@ Requests use `Host: hooklook.app` unless noted.
 | `zibs.app/login` | 404 | Private Grafana routes are answered by Caddy and reach no upstream. |
 | `zibs.app/public-dashboards/test` | 200 | The public shared-dashboard route is proxied. |
 | `/public-dashboards/test` | 200 | Hooklook's public shared-dashboard route is proxied, outside every rate-limit zone. |
+| `saga.dinubarbu.com/` and `/transfers/abc` | 200 from port 8080, same path | Everything outside `/grafana/*` reaches the Transfer Service. |
+| `saga.dinubarbu.com/grafana/d/saga-lab-trace` | 200 from port 3000, same path | Grafana keeps the `/grafana` prefix. |
+| WebSocket upgrade at `saga.dinubarbu.com/grafana/api/live/ws` | 101, then an echo | Upgrades pass through for Grafana Live. |
+| 21 × `POST` across `/transfers`, `/top-ups`, `/reset`, `/api/*` | twenty 200, then 429; a later `GET /api/transfers` 200 | The `saga_lab_submit` zone: one budget of 20 POSTs per minute. |
+| 300 requests under `saga.dinubarbu.com/grafana/*` | 200, then 429 on the 301st | The `saga_lab_grafana` zone: 300 per minute. |
 
 ### Metrics listener
 
@@ -148,11 +156,12 @@ These parts of the Caddy configuration are not exercised before deployment:
 - `encode zstd gzip`.
 - Upstream behaviour: the fixture always answers 200, so failing upstreams and
   streamed (SSE) responses are not exercised.
-- Production wiring: the `hooklook-edge` and `zibs-edge` networks, the
+- Production wiring: the `hooklook-edge`, `zibs-edge`, and `saga-lab-edge` networks, the
   certificate volumes, and the admin API on `localhost:2019`.
 
 After activation, [`verify.sh`](../scripts/verify.sh) closes part of this gap
 on the VPS: it requests `https://zibs.app/`, `https://hooklook.app/health` and
 two gallery pages over real TLS and the edge networks, fails on any Caddy
 error log since the container started, and the deployment rolls back if it
-fails.
+fails. It does not request `saga.dinubarbu.com`, which answers `502` until
+Saga Lab is first deployed.

@@ -114,6 +114,50 @@ hooklook.app {
 	}
 }
 
+saga.dinubarbu.com {
+	encode zstd gzip
+
+	# Keyed on the direct socket peer, as for hooklook.app. The submission zone
+	# is one budget shared by every form and JSON API POST.
+	route {
+		rate_limit {
+			disable_metrics
+			zone saga_lab_submit {
+				match {
+					method POST
+					path /transfers /top-ups /reset /api/*
+				}
+				key {remote_host}
+				events 20
+				window 1m
+			}
+
+			zone saga_lab_grafana {
+				match {
+					path /grafana/*
+				}
+				key {remote_host}
+				events 300
+				window 1m
+			}
+		}
+
+		# Saga Lab's whole Grafana UI, unlike the public-dashboard allowlists
+		# above: its Trace link passes a traceId variable, which an externally
+		# shared dashboard cannot take, so visitors use Grafana's anonymous
+		# Viewer role. Grafana serves from this sub-path, so the prefix is kept;
+		# Grafana Live's WebSocket upgrade passes through reverse_proxy. Saga
+		# Lab's Compose file sets both aliases on saga-lab-edge.
+		handle /grafana/* {
+			reverse_proxy saga-lab-grafana:3000
+		}
+
+		handle {
+			reverse_proxy saga-lab:8080
+		}
+	}
+}
+
 # Private scrape listener. No host publication; admin remains on localhost:2019.
 http://:9180 {
 	handle /metrics {

@@ -9,8 +9,9 @@ observability installation, Grafana password changes, and recovery. This
 runbook assumes a prepared Docker VPS; it does not provision the host,
 manage DNS, or deploy any upstream application; each upstream is deployed from
 its own repository:
-[zibs](https://github.com/dvinubius/zibs) and
-[Hooklook](https://github.com/dvinubius/hooklook/blob/main/docs/deployment-runbook.md).
+[zibs](https://github.com/dvinubius/zibs),
+[Hooklook](https://github.com/dvinubius/hooklook/blob/main/docs/deployment-runbook.md) and
+[Saga Lab](https://github.com/dvinubius/saga-lab).
 The live project is `/opt/caddy`.
 
 ## What this project owns
@@ -20,11 +21,12 @@ and mounts `Caddyfile`. On the VPS, deployment writes
 `/opt/caddy/compose.override.yaml`, which Compose merges into every plain
 `docker compose` command there, to pin `caddy` to its verified
 `ghcr.io/dvinubius/hetzner-one-caddy@sha256:…` image. Commands with
-`-f compose.observability.yaml` do not read it. Caddy serves `zibs.app`, `art-gallery.dinubarbu.com`, and
-`hooklook.app`. It also owns both `hooklook-edge` and `zibs-edge` Docker networks. Hooklook
-and zibs join their respective edge networks externally, so deploy this
-project before either of them: Hooklook's deployment stops at its
-`hooklook-edge` check until this project has created the network. The
+`-f compose.observability.yaml` do not read it. Caddy serves `zibs.app`, `art-gallery.dinubarbu.com`,
+`hooklook.app`, and `saga.dinubarbu.com`. It also owns the `hooklook-edge`, `zibs-edge`, and
+`saga-lab-edge` Docker networks. Hooklook, zibs, and Saga Lab join their
+respective edge networks externally, so deploy this project before any of
+them: Hooklook's and Saga Lab's deployments stop at their edge-network check
+until this project has created the network. The
 `caddy_caddy-data`/`caddy_caddy-config` volumes must already exist; they are
 external resources and must be preserved. Gallery files
 must exist at `/opt/art-gallery/public` and are mounted read-only. No secrets
@@ -418,6 +420,23 @@ expected temporary state before Hooklook was first deployed; the current
 deployment verifier requires its `/health` route to succeed. Do not read the
 related application repositories unless the user explicitly asks; Docker
 status, network inspection, and Caddy logs are enough for initial triage.
+
+`verify.sh` does not request `saga.dinubarbu.com`. Until Saga Lab is first
+deployed and joins `saga-lab-edge`, that site answers `502`, which confirms
+DNS, TLS, and host routing; any such request during a deployment's
+verification window would log an upstream error and fail `verify.sh`, so
+retry the deployment if that happens. After the first Caddy deployment that
+adds the site, confirm the network exists and the certificate was issued:
+
+```bash
+docker network inspect --format '{{.Name}} {{index .Labels "com.docker.compose.project"}}' saga-lab-edge
+curl -sS -o /dev/null -w '%{http_code}\n' https://saga.dinubarbu.com/
+```
+
+The first prints `saga-lab-edge caddy`; the second `502` before Saga Lab is
+deployed, `200` after. A `saga-lab-edge` network created outside this
+project makes Compose refuse to start Caddy; remove it while nothing is
+attached, then redeploy.
 
 After deploying a Hooklook capture-body policy change, run Hooklook's
 [`scripts/verify-public.sh`](https://github.com/dvinubius/hooklook/blob/main/scripts/verify-public.sh)
