@@ -1,6 +1,6 @@
 # Hetzner-One
 
-Shared Caddy ingress for the VPS. This Compose project is the sole owner of
+Shared Caddy ingress for a Hetzner VPS. This Compose project is the sole owner of
 public TCP 80/443 and UDP 443, TLS certificate state, hostname routing, and
 the gallery bind mount. It serves `zibs.app`, `art-gallery.dinubarbu.com`,
 `hooklook.app`, and `saga.dinubarbu.com`.
